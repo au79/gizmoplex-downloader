@@ -7,6 +7,7 @@ describe('download summaries', () => {
       const summary = createDownloadSummary();
       addSummaryDownload(summary.required, { extension: 'mp4', sizeBytes: 10, skip: false });
       addSummaryDownload(summary.required, { extension: 'zip', skip: false });
+      addSummaryDownload(summary.required, { extension: 'txt', sizeBytes: 0, skip: false });
       addSummaryDownload(summary.alreadyDownloaded, { extension: 'vtt', sizeBytes: 5, skip: true });
 
       expect(summary.required).toMatchObject({ counts: { mp4: 1, zip: 1 }, sizeBytes: 10, unknownSizes: 1 });

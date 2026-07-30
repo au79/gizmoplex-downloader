@@ -15,7 +15,7 @@ export function extractVideoUrls(html: string, pageUrl: string): string[] {
   const seen = new Set<string>();
   const urls: string[] = [];
 
-  $('a[href]').each((_, link) => {
+  $('a').each((_, link) => {
     const href = $(link).attr('href');
 
     if (!href) {
