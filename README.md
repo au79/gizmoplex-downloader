@@ -46,8 +46,8 @@ Archive every discovered item without prompts:
 pnpm exec tsx src/index.ts
 ```
 
-This non-interactive mode starts downloading each item as it is planned. Use a
-dry run first if you want to review the archive before transferring files.
+This non-interactive mode shows the complete plan and asks for confirmation
+before transferring files. Use `--yes` only for an unattended run.
 
 Preview what would be downloaded, including file sizes and items that already
 exist locally:
@@ -74,6 +74,7 @@ Useful options:
   such as `--delay 1-10`.
 - `--show-in-progress-plan` — display a saved interrupted download plan without
   logging in.
+- `-y, --yes` — bypass the confirmation prompt in non-interactive mode.
 
 Run `pnpm exec tsx src/index.ts --help` for the full option list.
 

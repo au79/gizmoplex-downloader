@@ -6,9 +6,6 @@ This document describes the supported behavior of the CLI. It is an
 implementation specification, not a guarantee that Gizmoplex or its upstream
 providers will continue to expose the same pages and APIs.
 
-The [accepted requirements awaiting implementation](#accepted-requirements-awaiting-implementation)
-section records approved behavior that is not present in the current release.
-
 The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are used as described
 by [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -58,11 +55,19 @@ creation, payment, content sharing, or access-control bypasses.
 - Files MUST be placed beneath a sanitized transaction directory. Video and
   subtitle filenames use the sanitized selected title; ZIP filenames use their
   signed URL or link metadata when available.
-- Existing files MUST be skipped rather than downloaded again.
+- An existing file MUST be skipped when its size matches the source
+  `Content-Length`, when that value is available. Files without an available
+  source length MAY be reused without a size check.
+- When distinct assets would resolve to the same destination path, the CLI MUST
+  preserve both files by appending `--<hash>` before the extension, where
+  `<hash>` is the first twelve lowercase hexadecimal characters of the SHA-256
+  digest of the complete source download URL. The suffix is stable for an exact
+  URL; a renewed signed URL is allowed to produce a separate filename.
 
 ## Planning and recovery
 
-- Non-dry-run downloads MUST build a plan for an item before writing its files.
+- Non-dry-run downloads MUST build the complete archive plan before writing
+  files.
 - An interrupted non-dry-run MUST save its plan as `<output>/.in-progress`,
   unless `--in-progress-plan <path>` specifies another location.
 - A subsequent run with an existing plan MUST offer to resume it. A successful
@@ -78,12 +83,10 @@ Non-interactive mode is the default when `--interactive` is not supplied.
 - The CLI MUST print the authenticated account's transactions, then process
   every transaction without asking the user to choose items.
 - For each transaction, it MUST inspect the product page for ZIP assets and
-  video pages. ZIP assets are planned and, outside a dry run, downloaded as
-  they are encountered.
-- It MUST then process each discovered video page, plan the selected video and
-  subtitle files, and download that item's unskipped files immediately.
-- The default non-interactive mode MUST NOT require a final confirmation before
-  transferring files.
+  video pages, then plan the selected video and subtitle files.
+- The CLI MUST display the complete plan and summary before transferring files.
+- The default non-interactive mode MUST require confirmation before transfer.
+  `--yes` MAY bypass that confirmation for unattended runs.
 - In a dry run, it MUST perform the same discovery and planning but MUST report
   `would download` or `skip` instead of transferring media.
 - When a delay is configured, the CLI MUST wait only between video pages whose
@@ -113,6 +116,11 @@ Non-interactive mode is the default when `--interactive` is not supplied.
   ten times with exponential backoff starting at one second.
 - Final errors MUST identify the failed resource without exposing credential or
   token values.
+- Downloads MUST be written to a temporary file and renamed only after success.
+  When a download response provides `Content-Length`, the streamed byte count
+  MUST match it before rename.
+- If a supported provider exposes a trusted expected cryptographic digest, the
+  CLI MUST verify that digest before rename.
 - The CLI MUST show download progress and print total runtime using a compact,
   zero-padded duration format.
 
@@ -127,18 +135,3 @@ pnpm test
 pnpm run build
 pnpm exec tsx src/index.ts --help
 ```
-
-## Accepted requirements awaiting implementation
-
-- A default non-interactive run MUST build and display the complete archive
-  plan and summary before transferring files. It MUST require confirmation;
-  `--yes` MAY explicitly bypass that confirmation for unattended runs.
-- When distinct assets would resolve to the same destination path, the CLI MUST
-  preserve both files by appending `--<hash>` before the extension, where
-  `<hash>` is the first twelve lowercase hexadecimal characters of the SHA-256
-  digest of the complete source download URL. The suffix is stable for an exact
-  URL; a renewed signed URL is allowed to produce a separate filename.
-- The CLI MUST write each download to a temporary file and rename it only after
-  success. When the response provides `Content-Length`, the streamed byte count
-  MUST match it before rename. A cryptographic digest MUST be checked when a
-  trusted expected digest is available from the source.
