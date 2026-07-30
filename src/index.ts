@@ -931,7 +931,7 @@ async function selectTransaction(
     pageSize: pageSize(),
     choices: [
       ...transactions.map((item) => ({
-        name: `${item.transaction.date}  ${item.transaction.description} (selected: ${selectedItemCount(selectedItems, item.transaction)}, downloaded: ${item.alreadyDownloadedCount}, total: ${item.items.length})`,
+        name: `${item.transaction.date}  ${item.transaction.description} (selected: ${selectedItemCount(selectedItems, item.transaction)}, downloaded: ${item.alreadyDownloadedCount}/${item.items.length})`,
         value: { kind: 'transaction' as const, transaction: item },
         description: item.transaction.url,
       })),
