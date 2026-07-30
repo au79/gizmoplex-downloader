@@ -1073,7 +1073,7 @@ async function selectedDownloadableItemsForAction(
     choices: items.map((item) => ({
       name: displayDownloadableItem(item),
       value: item,
-      description: item.item.kind === 'zip' ? item.item.link.url : item.item.url,
+      description: displayDownloadableItemDescription(item),
       checked: selectedItems.has(item.item.id),
     })),
   }, { output: process.stderr });
@@ -1085,6 +1085,14 @@ function displayDownloadableItem(item: SelectedInteractiveItem): string {
   }
 
   return normalizeText(item.page?.title ?? '') || item.transaction.description;
+}
+
+function displayDownloadableItemDescription(item: SelectedInteractiveItem): string {
+  if (item.item.kind === 'zip') {
+    return `Signed album download: ${zipFilename(item.item.link)}`;
+  }
+
+  return item.item.url;
 }
 
 function selectedItemCount(selectedItems: Map<string, SelectedInteractiveItem>, transaction: Transaction): number {
