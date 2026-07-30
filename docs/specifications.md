@@ -134,8 +134,10 @@ pnpm exec tsx src/index.ts --help
   plan and summary before transferring files. It MUST require confirmation;
   `--yes` MAY explicitly bypass that confirmation for unattended runs.
 - When distinct assets would resolve to the same destination path, the CLI MUST
-  preserve both files by appending a deterministic, source-derived suffix before
-  the extension.
+  preserve both files by appending `--<hash>` before the extension, where
+  `<hash>` is the first twelve lowercase hexadecimal characters of the SHA-256
+  digest of the complete source download URL. The suffix is stable for an exact
+  URL; a renewed signed URL is allowed to produce a separate filename.
 - The CLI MUST write each download to a temporary file and rename it only after
   success. When the response provides `Content-Length`, the streamed byte count
   MUST match it before rename. A cryptographic digest MUST be checked when a
