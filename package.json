@@ -8,7 +8,9 @@
     "build": "tsc",
     "dry-run": "tsx src/index.ts --dry-run",
     "show-in-progress-plan": "tsx src/index.ts --show-in-progress-plan",
-    "start": "tsx src/index.ts -i"
+    "start": "tsx src/index.ts -i",
+    "test": "vitest run src",
+    "test:coverage": "vitest run src --coverage"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.4.2",
@@ -20,8 +22,10 @@
   "devDependencies": {
     "@types/node": "^25.6.2",
     "@types/progress": "^2.0.7",
+    "@vitest/coverage-v8": "^4.1.10",
     "tsx": "^4.21.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "^4.1.10"
   },
   "private": true
 }

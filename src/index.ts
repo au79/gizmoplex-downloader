@@ -11,6 +11,12 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import ProgressBar from 'progress';
+import { formatBytes, formatDuration, normalizeText, redactUrl, sanitizePathComponent } from './lib/format.js';
+import { parseOptionalDelayRange, parsePositiveInteger } from './lib/options.js';
+import type { DelayRange } from './lib/options.js';
+import { extensionForDownload, extractDownloadLinks, extractVideoUrls, extractZipDownloadLinks, parseSubtitleFormat, selectHighestResolutionVideo, selectSubtitleLinks, zipFilename } from './lib/links.js';
+import type { DownloadLink, SubtitleFormat } from './lib/links.js';
+import { addSummaryDownload, createDownloadSummary, printDownloadSummary } from './lib/summary.js';
 
 const LOGIN_URL = 'https://www.gizmoplex.com/login';
 const TRANSACTIONS_URL = 'https://www.gizmoplex.com/settings/manage/transactions';
@@ -106,12 +112,6 @@ type TransactionMenuSelection =
   | { kind: 'confirm' }
   | { kind: 'transaction'; transaction: InteractiveTransaction };
 
-type DownloadLink = {
-  kind: string;
-  label: string;
-  url: string;
-};
-
 type PlannedDownload = {
   extension: string;
   kind: 'video' | 'subtitle' | 'zip';
@@ -147,20 +147,6 @@ type ApiTransaction = {
   product_url?: unknown;
 };
 
-type CountedFileType = 'mp4' | 'srt' | 'vtt' | 'zip';
-
-type DownloadSummary = {
-  alreadyDownloaded: DownloadSummaryRow;
-  remaining: DownloadSummaryRow;
-  required: DownloadSummaryRow;
-};
-
-type DownloadSummaryRow = {
-  counts: Record<CountedFileType, number>;
-  sizeBytes: number;
-  unknownSizes: number;
-};
-
 let activeInProgress: { path: string; planned: PlannedVideoDownload[] } | undefined;
 
 const program = new Command()
@@ -175,59 +161,15 @@ const program = new Command()
   .option('--delay <seconds>', 'random delay range between video pages, as min-max seconds')
   .option('--srt', 'select SRT subtitle files', false)
   .option('--vtt', 'select VTT subtitle files', false)
-  .option('--timeout <ms>', 'request timeout in milliseconds', parseInteger, 30_000);
+  .option('--timeout <ms>', 'request timeout in milliseconds', parsePositiveInteger, 30_000);
 
 program.parse();
-
-function parseInteger(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`Expected a positive integer, got ${value}`);
-  }
-
-  return parsed;
-}
-
-type DelayRange = {
-  max: number;
-  min: number;
-};
-
-function parseDelayRange(value: string): DelayRange {
-  const match = value.match(/^([1-9]\d*)-([1-9]\d*)$/);
-
-  if (!match) {
-    throw new Error(`Expected delay range as positive-int-positive-int, got ${value}`);
-  }
-
-  const min = Number.parseInt(match[1], 10);
-  const max = Number.parseInt(match[2], 10);
-
-  if (min > max) {
-    throw new Error(`Expected delay range min to be <= max, got ${value}`);
-  }
-
-  return { max, min };
-}
 
 function normalizeOptions(options: CliOptions): Options {
   return {
     ...options,
     delay: parseOptionalDelayRange(options.delay, options.dryRun),
   };
-}
-
-function parseOptionalDelayRange(value: string | undefined, dryRun: boolean): DelayRange | undefined {
-  if (value === undefined) {
-    return dryRun ? { max: 10, min: 1 } : undefined;
-  }
-
-  if (value === '') {
-    return undefined;
-  }
-
-  return parseDelayRange(value);
 }
 
 async function readEmail(): Promise<string> {
@@ -1157,150 +1099,6 @@ function replaceStderrLine(message: string): void {
   process.stderr.write(`\r\x1b[2K${message}`);
 }
 
-function extractVideoUrls(html: string, pageUrl: string): string[] {
-  const $ = cheerio.load(html);
-  const seen = new Set<string>();
-  const urls: string[] = [];
-
-  $('a[href]').each((_, link) => {
-    const href = $(link).attr('href');
-    if (!href) {
-      return;
-    }
-
-    const url = new URL(href, pageUrl);
-    if (!isLikelyVideoPage(url)) {
-      return;
-    }
-
-    const normalizedUrl = url.toString();
-
-    if (!seen.has(normalizedUrl)) {
-      urls.push(normalizedUrl);
-    }
-    seen.add(normalizedUrl);
-  });
-
-  return urls;
-}
-
-function isLikelyVideoPage(url: URL): boolean {
-  return url.hostname.endsWith('gizmoplex.com') && (
-    url.pathname.startsWith('/videos/') ||
-    /\/packages\/[^/]+\/videos\/[^/]+/.test(url.pathname) ||
-    url.pathname.startsWith('/watch/') ||
-    url.pathname.startsWith('/movies/') ||
-    url.pathname.startsWith('/series/')
-  );
-}
-
-function extractDownloadLinks(html: string, pageUrl: string): DownloadLink[] {
-  const $ = cheerio.load(html);
-  const links: DownloadLink[] = [];
-  const seen = new Set<string>();
-
-  $('a[href], source[src], track[src]').each((_, element) => {
-    const item = $(element);
-    const href = item.attr('href') ?? item.attr('src');
-
-    if (!href) {
-      return;
-    }
-
-    const url = new URL(href, pageUrl).toString();
-    const label = normalizeText(item.text()) || normalizeText(item.attr('label') ?? item.attr('title') ?? item.attr('download') ?? '');
-
-    if (url.endsWith('#')) {
-      return;
-    }
-
-    if (!isLikelyDownloadUrl(url, label) || seen.has(url)) {
-      return;
-    }
-
-    seen.add(url);
-    links.push({
-      kind: linkKind(url, label),
-      label,
-      url,
-    });
-  });
-
-  for (const rawUrl of html.match(/https?:\\?\/\\?\/[^"'\\\s<>)]+/g) ?? []) {
-    const url = rawUrl.replaceAll('\\/', '/');
-
-    if (!isLikelyDownloadUrl(url, '') || seen.has(url)) {
-      continue;
-    }
-
-    seen.add(url);
-    links.push({
-      kind: linkKind(url, ''),
-      label: '',
-      url,
-    });
-  }
-
-  return links;
-}
-
-function extractZipDownloadLinks(html: string, pageUrl: string): DownloadLink[] {
-  return extractDownloadLinks(html, pageUrl).filter((link) => link.kind === 'zip');
-}
-
-function selectHighestResolutionVideo(links: DownloadLink[]): DownloadLink | undefined {
-  const videos = links.filter((link) => link.kind === 'video');
-
-  return [...videos].sort((left, right) => videoResolution(right) - videoResolution(left))[0];
-}
-
-function selectSubtitleLinks(links: DownloadLink[], formats: Set<SubtitleFormat>): DownloadLink[] {
-  const selectedByFormat = new Map<SubtitleFormat, DownloadLink>();
-
-  for (const link of links) {
-    if (link.kind !== 'subtitle') {
-      continue;
-    }
-
-    const format = parseSubtitleFormat(`${link.label} ${link.url}`);
-
-    if (format && formats.has(format) && !selectedByFormat.has(format)) {
-      selectedByFormat.set(format, link);
-    }
-  }
-
-  return [...selectedByFormat.values()];
-}
-
-function videoResolution(link: DownloadLink): number {
-  const value = `${link.label} ${link.url}`;
-  const matches = [...value.matchAll(/(?:^|[^0-9])([1-9]\d{2,3})p(?:[^0-9]|$)/gi)]
-    .map((match) => Number.parseInt(match[1], 10));
-
-  return Math.max(0, ...matches);
-}
-
-function extensionForDownload(link: DownloadLink): string {
-  const urlPath = new URL(link.url).pathname;
-  const extension = path.extname(urlPath).replace(/^\./, '').toLowerCase();
-
-  if (extension) {
-    return extension;
-  }
-
-  if (link.kind === 'subtitle') {
-    return parseSubtitleFormat(`${link.label} ${link.url}`) ?? 'srt';
-  }
-
-  return 'mp4';
-}
-
-function zipFilename(link: DownloadLink): string {
-  const fromUrl = path.basename(new URL(link.url).pathname);
-
-  return fromUrl || link.label || 'download.zip';
-}
-
 async function fetchVhxVideo(
   client: HttpClient,
   html: string,
@@ -1468,8 +1266,6 @@ function validTitleCandidate(value: string | undefined): string | undefined {
   return title;
 }
 
-type SubtitleFormat = 'srt' | 'vtt';
-
 function selectedSubtitleFormats(options: Options): Set<SubtitleFormat> {
   if (!options.srt && !options.vtt) {
     return new Set(['srt']);
@@ -1479,18 +1275,6 @@ function selectedSubtitleFormats(options: Options): Set<SubtitleFormat> {
     ...(options.srt ? ['srt' as const] : []),
     ...(options.vtt ? ['vtt' as const] : []),
   ]);
-}
-
-function parseSubtitleFormat(value: string): SubtitleFormat | undefined {
-  if (/srt/i.test(value)) {
-    return 'srt';
-  }
-
-  if (/vtt/i.test(value)) {
-    return 'vtt';
-  }
-
-  return undefined;
 }
 
 type VhxVideoResponse = {
@@ -1538,28 +1322,6 @@ function dedupeLinks(links: DownloadLink[]): DownloadLink[] {
     seen.add(link.url);
     return true;
   });
-}
-
-function isLikelyDownloadUrl(url: string, label: string): boolean {
-  return /download|subtitle|caption|\.zip(?:[?#]|$)|\.srt(?:[?#]|$)|\.vtt(?:[?#]|$)|\.mp4(?:[?#]|$)|\.m4v(?:[?#]|$)|\.mov(?:[?#]|$)|\.m3u8(?:[?#]|$)|\.mpd(?:[?#]|$)/i.test(`${url} ${label}`);
-}
-
-function linkKind(url: string, label: string): string {
-  const value = `${url} ${label}`;
-
-  if (/subtitle|caption|\.srt(?:[?#]|$)|\.vtt(?:[?#]|$)/i.test(value)) {
-    return 'subtitle';
-  }
-
-  if (/\.m3u8(?:[?#]|$)|\.mpd(?:[?#]|$)/i.test(value)) {
-    return 'stream';
-  }
-
-  if (/\.zip(?:[?#]|$)/i.test(value)) {
-    return 'zip';
-  }
-
-  return 'video';
 }
 
 function extractPageTitle(html: string): string {
@@ -1689,22 +1451,6 @@ function stripKnownTitleParts(title: string, parts: Array<string | undefined>, s
   }
 
   return result;
-}
-
-function normalizeText(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
-function sanitizePathComponent(value: string): string {
-  const sanitized = normalizeText(value)
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
-    .replace(/\.+$/g, '')
-    .replace(/\s*-\s*/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .trim();
-
-  return sanitized || 'untitled';
 }
 
 async function ensureDirectory(dirPath: string): Promise<void> {
@@ -1880,22 +1626,6 @@ function isRetryableStatusCodeMessage(message: string): boolean {
 
 function formatRetryDelay(milliseconds: number): string {
   return `${Math.round(milliseconds / 1000)}s`;
-}
-
-function redactUrl(value: string): string {
-  try {
-    const url = new URL(value);
-
-    for (const key of ['auth-user-token', 'token']) {
-      if (url.searchParams.has(key)) {
-        url.searchParams.set(key, '[redacted]');
-      }
-    }
-
-    return url.toString();
-  } catch {
-    return value;
-  }
 }
 
 function hashCacheKey(value: string): string {
@@ -2084,118 +1814,6 @@ function printDownloadPlan(
     }
     output(`    ${download.path}`);
   }
-}
-
-function createDownloadSummary(): DownloadSummary {
-  return {
-    alreadyDownloaded: createDownloadSummaryRow(),
-    remaining: createDownloadSummaryRow(),
-    required: createDownloadSummaryRow(),
-  };
-}
-
-function createDownloadSummaryRow(): DownloadSummaryRow {
-  return {
-    counts: {
-      mp4: 0,
-      srt: 0,
-      vtt: 0,
-      zip: 0,
-    },
-    sizeBytes: 0,
-    unknownSizes: 0,
-  };
-}
-
-function addSummaryDownload(row: DownloadSummaryRow, download: PlannedDownload): void {
-  const fileType = countedFileType(download.extension);
-
-  if (fileType) {
-    row.counts[fileType] += 1;
-  }
-
-  if (download.sizeBytes === undefined) {
-    row.unknownSizes += 1;
-  } else {
-    row.sizeBytes += download.sizeBytes;
-  }
-}
-
-function countedFileType(extension: string): CountedFileType | undefined {
-  const normalized = extension.toLowerCase();
-
-  if (normalized === 'mp4' || normalized === 'srt' || normalized === 'vtt' || normalized === 'zip') {
-    return normalized;
-  }
-
-  return undefined;
-}
-
-function printDownloadSummary(summary: DownloadSummary, output: (message?: unknown) => void): void {
-  const rows = [
-    ['Section', 'Size', 'MP4', 'ZIP', 'VTT', 'SRT', 'Unknown'],
-    downloadSummaryRow('Already downloaded', summary.alreadyDownloaded),
-    downloadSummaryRow('Remaining download', summary.remaining),
-    downloadSummaryRow('Total required', summary.required),
-  ];
-  const widths = rows[0].map((_, columnIndex) => Math.max(...rows.map((row) => row[columnIndex].length)));
-
-  output('');
-  for (const row of rows) {
-    output(row.map((value, index) => value.padEnd(widths[index])).join('  '));
-  }
-}
-
-function downloadSummaryRow(label: string, row: DownloadSummaryRow): string[] {
-  return [
-    label,
-    formatBytes(row.sizeBytes),
-    String(row.counts.mp4),
-    String(row.counts.zip),
-    String(row.counts.vtt),
-    String(row.counts.srt),
-    String(row.unknownSizes),
-  ];
-}
-
-function formatBytes(bytes: number | undefined): string {
-  if (bytes === undefined || !Number.isFinite(bytes)) {
-    return 'unknown size';
-  }
-
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  const precision = unitIndex === 0 || value >= 10 ? 0 : 1;
-
-  return `${value.toFixed(precision)} ${units[unitIndex]}`;
-}
-
-function formatDuration(milliseconds: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${padDurationValue(hours)}h${padDurationValue(minutes)}m${padDurationValue(seconds)}s`;
-  }
-
-  if (minutes > 0) {
-    return `${padDurationValue(minutes)}m${padDurationValue(seconds)}s`;
-  }
-
-  return `${padDurationValue(seconds)}s`;
-}
-
-function padDurationValue(value: number): string {
-  return String(value).padStart(2, '0');
 }
 
 async function main(): Promise<void> {
