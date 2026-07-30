@@ -63,8 +63,7 @@ export function extractDownloadLinks(html: string, pageUrl: string): DownloadLin
     links.push({ kind: linkKind(url, label), label, url });
   });
 
-  for (const rawUrl of html.match(/https?:\\?\/\\?\/[^"'\\\s<>)]+/g) ?? []) {
-    const url = rawUrl.replaceAll('\\/', '/');
+  for (const url of html.replaceAll('\\/', '/').match(/https?:\/\/[^"'\s<>)]+/g) ?? []) {
 
     if (!isLikelyDownloadUrl(url, '') || seen.has(url)) {
       continue;
