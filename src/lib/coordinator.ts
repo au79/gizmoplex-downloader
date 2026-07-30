@@ -15,10 +15,11 @@ import { printDownloadPlan, printTransactions } from './terminal.js';
 import { printDownloadSummary } from './summary.js';
 import { processInteractiveArchive } from './interactive-workflow.js';
 import { errorMessage, sleep } from './runtime.js';
-import { sanitizePathComponent } from './format.js';
+import { formatDuration, sanitizePathComponent } from './format.js';
 
 export async function runApplication(options: Options): Promise<void> {
   const outputRoot = path.resolve(options.out);
+  const startedAt = Date.now();
   const controller = createResumeController();
   const signalHandler = createInterruptHandler(controller);
   process.on('SIGINT', signalHandler);
@@ -42,6 +43,7 @@ export async function runApplication(options: Options): Promise<void> {
     }
   } finally {
     process.off('SIGINT', signalHandler);
+    if (!options.showInProgressPlan) (options.dryRun ? console.log : console.error)(`Total runtime: ${formatDuration(Date.now() - startedAt)}`);
   }
 }
 
@@ -121,6 +123,6 @@ export async function countDownloadedItems(outputRoot: string, transaction: Tran
 
 async function waitRandomDelay(delay: { min: number; max: number }): Promise<void> {
   const seconds = Math.floor(Math.random() * (delay.max - delay.min + 1)) + delay.min;
-  console.error(`Waiting ${seconds}s before next video page...`);
+  console.error(`Waiting ${seconds}s before next downloadable item...`);
   await sleep(seconds * 1000);
 }

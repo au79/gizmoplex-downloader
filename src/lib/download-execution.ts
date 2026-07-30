@@ -33,7 +33,7 @@ export async function downloadPlannedVideos(
     setActive: (active: { path: string; planned: PlannedVideoDownload[] } | undefined) => void;
   },
 ): Promise<void> {
-  let shouldDelayBeforeNextVideoPage = false;
+  let shouldDelayBeforeNextItem = false;
   let remaining = planned;
   await dependencies.ensureDirectory(path.dirname(planPath));
   dependencies.setActive({ path: planPath, planned });
@@ -41,12 +41,12 @@ export async function downloadPlannedVideos(
     for (const [index, item] of planned.entries()) {
       remaining = planned.slice(index);
       dependencies.setActive({ path: planPath, planned: remaining });
-      if (shouldDelayBeforeNextVideoPage && delay) await dependencies.waitDelay(delay);
+      if (shouldDelayBeforeNextItem && delay) await dependencies.waitDelay(delay);
       console.error('');
       console.error(`${index + 1} of ${planned.length}`);
       dependencies.printPlan(item);
       await downloadPlannedFiles(client, item.downloads, dependencies.fileSize);
-      shouldDelayBeforeNextVideoPage = item.downloads.some((download) => !download.skip);
+      shouldDelayBeforeNextItem = item.downloads.some((download) => !download.skip);
     }
     dependencies.setActive(undefined);
     if (deleteInProgressOnSuccess) await dependencies.deletePlan(planPath);

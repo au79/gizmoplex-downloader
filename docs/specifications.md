@@ -89,9 +89,13 @@ Non-interactive mode is the default when `--interactive` is not supplied.
   `--yes` MAY bypass that confirmation for unattended runs.
 - In a dry run, it MUST perform the same discovery and planning but MUST report
   `would download` or `skip` instead of transferring media.
-- When a delay is configured, the CLI MUST wait only between video pages whose
-  previous plan contains at least one unskipped download. It MUST NOT delay
-  after an item that was entirely skipped.
+- When a delay is configured, the CLI MUST wait only between downloadable items
+  whose previous item contains at least one unskipped download. It MUST NOT
+  delay after an item that was entirely skipped. This delay is a courtesy
+  measure intended to avoid overtaxing upstream servers or making the request
+  pattern appear malicious; it MUST NOT be inserted between individual file
+  transfer requests within one item, because sequential HEAD/GET requests and
+  the transfer itself already provide natural spacing.
 
 ## Output and interaction
 
@@ -103,12 +107,22 @@ Non-interactive mode is the default when `--interactive` is not supplied.
 - A summary MUST report already-downloaded, remaining, and total-required
   items, with counts for MP4, ZIP, VTT, SRT, and unknown sizes.
 - `--delay <min-max>` MUST accept an inclusive positive-integer range in
-  seconds. It defaults to `1-10` in a dry run and to no delay otherwise.
+  seconds. It defaults to `1-10` in a dry run and to no delay otherwise. The
+  delay is intended as courtesy pacing to avoid overtaxing upstream servers or
+  making the request pattern appear malicious; it applies between downloadable
+  items, not between the individual requests that transfer one item.
 - `--interactive` (or `-i`) MUST allow users to build a selection across
   transactions, review it grouped by transaction, and explicitly confirm or
   cancel before downloading.
 - Interactive mode MUST keep current basket selections when revisiting a
   transaction and MUST hide items already present locally from the picker.
+- During multi-item downloads, the CLI SHOULD display an estimated total
+  remaining time based on a rolling average of recent completed-item durations
+  or throughput, rather than the instantaneous rate alone. The estimate MUST
+  use whole seconds, MUST NOT display a duration smaller than one second while
+  work remains, and MUST NOT be refreshed more than once per second. The
+  smoothing window SHOULD be bounded so the estimate responds to sustained
+  changes without jittering on individual chunks.
 
 ## Networking and errors
 

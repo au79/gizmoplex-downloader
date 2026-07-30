@@ -13,7 +13,7 @@ export function parseOptions(argv = process.argv): Options {
     .option('--in-progress-plan <filepath>', 'path to the in-progress download plan')
     .option('--show-in-progress-plan', 'print the saved in-progress download plan and exit', false)
     .option('-y, --yes', 'skip the non-interactive download confirmation', false)
-    .option('--delay <seconds>', 'random delay range between video pages, as min-max seconds')
+    .option('--delay <seconds>', 'random delay range between downloadable items, as min-max seconds')
     .option('--srt', 'select SRT subtitle files', false)
     .option('--vtt', 'select VTT subtitle files', false)
     .option('--timeout <ms>', 'request timeout in milliseconds', parsePositiveInteger, 30_000);

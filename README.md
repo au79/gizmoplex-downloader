@@ -97,8 +97,11 @@ Useful options:
 - `--srt` / `--vtt` — select subtitle formats; SRT is the default when neither
   option is given.
 - `--clear-cache` — discard cached video metadata before starting.
-- `--delay <min-max>` — wait a random number of seconds between video pages,
-  such as `--delay 1-10`.
+- `--delay <min-max>` — wait a random number of seconds between downloadable
+  items, such as `--delay 1-10`. This is courtesy pacing to avoid overtaxing
+  upstream servers or making the request pattern appear malicious; individual
+  file transfers remain sequential and are naturally spaced by their requests
+  and transfer time.
 - `--show-in-progress-plan` — display a saved interrupted download plan without
   logging in.
 - `-y, --yes` — bypass the confirmation prompt in non-interactive mode.
