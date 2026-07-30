@@ -25,7 +25,8 @@ describe('link discovery and selection', () => {
 
     it('deduplicates the repeated signed album link and preserves its filename', () => {
       const signedAlbumUrl = 'https://cdn.test/uploads/uuid.zip?response-content-disposition=attachment%3Bfilename%3D%22album-songs-in-the-key-of-mst.zip%22%3Bfilename%2A%3DUTF-8%27%27album-songs-in-the-key-of-mst.zip&Signature=private';
-      const html = `<a href="${signedAlbumUrl}">cover</a><a href="${signedAlbumUrl}">ALBUM: Songs in the Key of MST</a>`;
+      const renewedSignedAlbumUrl = signedAlbumUrl.replace('Signature=private', 'Signature=renewed');
+      const html = `<a href="${signedAlbumUrl}">cover</a><a href="${renewedSignedAlbumUrl}">ALBUM: Songs in the Key of MST</a>`;
       const links = extractZipDownloadLinks(html, 'https://www.gizmoplex.com/products/experiment085');
 
       expect(links).toHaveLength(1);

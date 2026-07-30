@@ -77,7 +77,22 @@ export function extractDownloadLinks(html: string, pageUrl: string): DownloadLin
 }
 
 export function extractZipDownloadLinks(html: string, pageUrl: string): DownloadLink[] {
-  return extractDownloadLinks(html, pageUrl).filter((link) => link.kind === 'zip');
+  const seen = new Set<string>();
+
+  return extractDownloadLinks(html, pageUrl).filter((link) => {
+    if (link.kind !== 'zip') {
+      return false;
+    }
+
+    const identity = zipIdentity(link);
+
+    if (seen.has(identity)) {
+      return false;
+    }
+
+    seen.add(identity);
+    return true;
+  });
 }
 
 export function selectHighestResolutionVideo(links: DownloadLink[]): DownloadLink | undefined {
@@ -128,6 +143,14 @@ export function zipFilename(link: DownloadLink): string {
   }
 
   return filename || path.basename(url.pathname) || link.label || 'download.zip';
+}
+
+function zipIdentity(link: DownloadLink): string {
+  const filename = zipFilename(link);
+
+  return filename !== 'download.zip'
+    ? `filename:${filename.toLowerCase()}`
+    : `path:${new URL(link.url).pathname.toLowerCase()}`;
 }
 
 export function parseSubtitleFormat(value: string): SubtitleFormat | undefined {
