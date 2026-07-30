@@ -87,10 +87,23 @@ type PageTitleCandidates = {
 
 type InteractiveTransaction = {
   alreadyDownloadedCount: number;
-  totalVideoCount: number;
+  items: InteractiveItem[];
   transaction: Transaction;
-  videoUrls: string[];
 };
+
+type InteractiveItem =
+  | { id: string; kind: 'video'; url: string }
+  | { id: string; kind: 'zip'; link: DownloadLink };
+
+type SelectedInteractiveItem = {
+  item: InteractiveItem;
+  page?: VideoPage;
+  transaction: Transaction;
+};
+
+type TransactionMenuSelection =
+  | { kind: 'confirm' }
+  | { kind: 'transaction'; transaction: InteractiveTransaction };
 
 type DownloadLink = {
   kind: string;
@@ -677,42 +690,43 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
   const metadataCache = new MetadataCache(outputRoot);
 
   const interactiveTransactions = await fetchInteractiveTransactions(client, transactions, outputRoot);
-  const selectedTransaction = await selectTransaction(interactiveTransactions);
-  const transaction = selectedTransaction.transaction;
-  const videos = await fetchVideosForUrls(client, metadataCache, transaction, selectedTransaction.videoUrls);
+  const selectedItems = new Map<string, SelectedInteractiveItem>();
 
-  if (videos.length === 0) {
-    console.error('No video pages found for the selected transaction.');
-    return;
+  while (true) {
+    const selection = await selectTransaction(interactiveTransactions, selectedItems);
+
+    if (selection.kind === 'confirm') {
+      break;
+    }
+
+    await selectItemsForTransaction(client, metadataCache, selection.transaction, selectedItems, outputRoot, options);
   }
 
-  const selectedVideos = await selectVideos(videos, transaction);
+  const planned = await Promise.all([...selectedItems.values()].map(async (selected): Promise<PlannedVideoDownload> => {
+    if (selected.item.kind === 'zip') {
+      return {
+        downloads: await planZipDownload(client, selected.transaction, selected.item.link, outputRoot, { ...options, dryRun: true }),
+        transactionDescription: selected.transaction.description,
+        videoTitle: zipFilename(selected.item.link),
+        videoUrl: selected.item.link.url,
+      };
+    }
 
-  if (selectedVideos.length === 0) {
-    console.error('No videos selected.');
-    return;
-  }
+    if (!selected.page) {
+      throw new Error(`Missing fetched metadata for ${selected.item.url}.`);
+    }
 
-  const confirmedSelection = await confirm({
-    message: `Plan downloads for ${selectedVideos.length} selected video(s)?`,
-    default: true,
-  }, { output: process.stderr });
-
-  if (!confirmedSelection) {
-    console.error('Cancelled before planning downloads.');
-    return;
-  }
-
-  const planned = await Promise.all(selectedVideos.map(async (video): Promise<PlannedVideoDownload> => ({
-    downloads: await planVideoDownloads(client, transaction, {
-      downloadLinks: video.downloadLinks,
-      pageTitleCandidates: video.pageTitleCandidates,
-      url: video.url,
-    }, video.title, outputRoot, { ...options, dryRun: true }, video.vhxVideo, video.vimeoConfig),
-    transactionDescription: transaction.description,
-    videoTitle: video.title,
-    videoUrl: video.url,
-  })));
+    return {
+      downloads: await planVideoDownloads(client, selected.transaction, {
+        downloadLinks: selected.page.downloadLinks,
+        pageTitleCandidates: selected.page.pageTitleCandidates,
+        url: selected.page.url,
+      }, selected.page.title, outputRoot, { ...options, dryRun: true }, selected.page.vhxVideo, selected.page.vimeoConfig),
+      transactionDescription: selected.transaction.description,
+      videoTitle: selected.page.title,
+      videoUrl: selected.page.url,
+    };
+  }));
   const summary = createDownloadSummary();
 
   for (const item of planned) {
@@ -723,7 +737,7 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
   }
 
   console.error('');
-  console.error(`Download summary for ${transaction.description}:`);
+  console.error('Download summary for selected items:');
   printDownloadSummary(summary, console.error);
 
   const confirmedDownload = await confirm({
@@ -737,6 +751,76 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
   }
 
   await downloadPlannedVideos(client, planned, outputRoot, options.delay, false);
+}
+
+async function selectItemsForTransaction(
+  client: HttpClient,
+  metadataCache: MetadataCache,
+  interactiveTransaction: InteractiveTransaction,
+  selectedItems: Map<string, SelectedInteractiveItem>,
+  outputRoot: string,
+  options: Options,
+): Promise<void> {
+  const { transaction } = interactiveTransaction;
+  const videoUrls = interactiveTransaction.items.filter((item): item is Extract<InteractiveItem, { kind: 'video' }> => item.kind === 'video').map((item) => item.url);
+  const videos = await fetchVideosForUrls(client, metadataCache, transaction, videoUrls);
+  const fetchedVideos = new Map(videos.map((video) => [video.url, video]));
+  const eligibleItems: SelectedInteractiveItem[] = [];
+
+  for (const item of interactiveTransaction.items) {
+    const existingSelection = selectedItems.get(item.id);
+
+    if (existingSelection) {
+      eligibleItems.push(existingSelection);
+      continue;
+    }
+
+    if (item.kind === 'zip') {
+      const downloads = await planZipDownload(client, transaction, item.link, outputRoot, options);
+
+      if (!downloads.every((download) => download.skip)) {
+        eligibleItems.push({ item, transaction });
+      }
+      continue;
+    }
+
+    const page = fetchedVideos.get(item.url);
+
+    if (!page) {
+      continue;
+    }
+
+    const downloads = await planVideoDownloads(client, transaction, {
+      downloadLinks: page.downloadLinks,
+      pageTitleCandidates: page.pageTitleCandidates,
+      url: page.url,
+    }, page.title, outputRoot, options, page.vhxVideo, page.vimeoConfig);
+
+    if (!downloads.some((download) => download.kind === 'video' && download.skip)) {
+      eligibleItems.push({ item, page, transaction });
+    }
+  }
+
+  if (eligibleItems.length === 0) {
+    console.error('No eligible downloadable items for this transaction.');
+    return;
+  }
+
+  const selectedForTransaction = await selectDownloadableItems(eligibleItems, selectedItems);
+
+  if (!selectedForTransaction) {
+    return;
+  }
+
+  for (const [id, selected] of selectedItems) {
+    if (selected.transaction.url === transaction.url) {
+      selectedItems.delete(id);
+    }
+  }
+
+  for (const selected of selectedForTransaction) {
+    selectedItems.set(selected.item.id, selected);
+  }
 }
 
 async function planVideoDownloads(
@@ -870,32 +954,48 @@ async function fetchInteractiveTransactions(
 
   for (const transaction of transactions) {
     const productPage = await client.get(transaction.url, undefined, `product page for ${transaction.description}`);
-    const videoUrls = extractVideoUrls(productPage.body, productPage.url);
+    const videoUrls = transaction.description === 'VAULT PICKS HAVE MOVED: Read Description! (12mo)'
+      ? []
+      : extractVideoUrls(productPage.body, productPage.url);
+    const zipLinks = extractZipDownloadLinks(productPage.body, productPage.url);
+    const items: InteractiveItem[] = [
+      ...videoUrls.map((url) => ({ id: `video:${transaction.url}:${url}`, kind: 'video' as const, url })),
+      ...zipLinks.map((link) => ({ id: `zip:${transaction.url}:${link.url}`, kind: 'zip' as const, link })),
+    ];
 
     results.push({
-      alreadyDownloadedCount: await countDownloadedMp4s(outputRoot, transaction),
-      totalVideoCount: videoUrls.length,
+      alreadyDownloadedCount: await countDownloadedItems(outputRoot, transaction),
+      items,
       transaction,
-      videoUrls,
     });
   }
 
   return results;
 }
 
-async function selectTransaction(transactions: InteractiveTransaction[]): Promise<InteractiveTransaction> {
+async function selectTransaction(
+  transactions: InteractiveTransaction[],
+  selectedItems: Map<string, SelectedInteractiveItem>,
+): Promise<TransactionMenuSelection> {
   if (transactions.length === 0) {
     throw new Error('No transactions found.');
   }
 
-  return select({
+  return select<TransactionMenuSelection>({
     message: 'Select a transaction',
     pageSize: pageSize(),
-    choices: transactions.map((item) => ({
-      name: `${item.transaction.date}  ${item.transaction.description} (${item.alreadyDownloadedCount}/${item.totalVideoCount})`,
-      value: item,
-      description: item.transaction.url,
-    })),
+    choices: [
+      ...transactions.map((item) => ({
+        name: `${item.transaction.date}  ${item.transaction.description} (${selectedItemCount(selectedItems, item.transaction)}/${item.alreadyDownloadedCount}/${item.items.length})`,
+        value: { kind: 'transaction' as const, transaction: item },
+        description: item.transaction.url,
+      })),
+      ...(selectedItems.size > 0 ? [{
+        name: 'Confirm selected download?',
+        value: { kind: 'confirm' as const },
+        description: `${selectedItems.size} item(s) selected`,
+      }] : []),
+    ],
   }, { output: process.stderr });
 }
 
@@ -960,53 +1060,41 @@ async function fetchVideosForUrls(client: HttpClient, metadataCache: MetadataCac
   return videos;
 }
 
-type VideoSelectionAction = 'all' | 'clear' | 'custom' | 'cancel';
+type DownloadableItemSelectionAction = 'all' | 'clear' | 'custom' | 'cancel';
 
-async function selectVideos(videos: VideoPage[], transaction: Transaction): Promise<VideoPage[]> {
+async function selectDownloadableItems(
+  items: SelectedInteractiveItem[],
+  selectedItems: Map<string, SelectedInteractiveItem>,
+): Promise<SelectedInteractiveItem[] | undefined> {
   console.error('');
-  console.error('Videos:');
-  videos.forEach((video, index) => {
-    console.error(`${String(index + 1).padStart(3, ' ')}. ${displayVideoTitle(video, transaction)}`);
+  console.error('Downloadable items:');
+  items.forEach((item, index) => {
+    console.error(`${String(index + 1).padStart(3, ' ')}. ${displayDownloadableItem(item)}`);
   });
 
   while (true) {
-    const action = await select<VideoSelectionAction>({
-      message: 'Select videos',
+    const action = await select<DownloadableItemSelectionAction>({
+      message: 'Select items',
       choices: [
         { name: 'Select all', value: 'all' },
         { name: 'Clear all', value: 'clear' },
-        { name: 'Choose videos', value: 'custom' },
+        { name: 'Choose items', value: 'custom' },
         { name: 'Cancel', value: 'cancel' },
       ],
     }, { output: process.stderr });
 
     if (action === 'cancel') {
-      return [];
+      return undefined;
     }
 
-    const selected = await selectedVideosForAction(action, videos, transaction);
-
-    if (selected.length === 0) {
-      const keepGoing = await confirm({
-        message: 'No videos are selected. Choose again?',
-        default: true,
-      }, { output: process.stderr });
-
-      if (keepGoing) {
-        continue;
-      }
-
-      return [];
-    }
+    const selected = await selectedDownloadableItemsForAction(action, items, selectedItems);
 
     console.error('');
-    console.error('Selected videos:');
-    selected.forEach((video, index) => {
-      console.error(`${String(index + 1).padStart(3, ' ')}. ${displayVideoTitle(video, transaction)}`);
-    });
+    console.error(selected.length === 0 ? 'No items selected.' : 'Selected items:');
+    selected.forEach((item, index) => console.error(`${String(index + 1).padStart(3, ' ')}. ${displayDownloadableItem(item)}`));
 
     const confirmed = await confirm({
-      message: 'Use this video selection?',
+      message: 'Use this item selection?',
       default: true,
     }, { output: process.stderr });
 
@@ -1016,9 +1104,13 @@ async function selectVideos(videos: VideoPage[], transaction: Transaction): Prom
   }
 }
 
-async function selectedVideosForAction(action: VideoSelectionAction, videos: VideoPage[], transaction: Transaction): Promise<VideoPage[]> {
+async function selectedDownloadableItemsForAction(
+  action: DownloadableItemSelectionAction,
+  items: SelectedInteractiveItem[],
+  selectedItems: Map<string, SelectedInteractiveItem>,
+): Promise<SelectedInteractiveItem[]> {
   if (action === 'all') {
-    return videos;
+    return items;
   }
 
   if (action === 'clear' || action === 'cancel') {
@@ -1026,23 +1118,32 @@ async function selectedVideosForAction(action: VideoSelectionAction, videos: Vid
   }
 
   return checkbox({
-    message: 'Choose videos',
+    message: 'Choose items',
     pageSize: pageSize(),
     required: false,
     shortcuts: {
       all: 'a',
       invert: 'i',
     },
-    choices: videos.map((video) => ({
-      name: displayVideoTitle(video, transaction),
-      value: video,
-      description: video.url,
+    choices: items.map((item) => ({
+      name: displayDownloadableItem(item),
+      value: item,
+      description: item.item.kind === 'zip' ? item.item.link.url : item.item.url,
+      checked: selectedItems.has(item.item.id),
     })),
   }, { output: process.stderr });
 }
 
-function displayVideoTitle(video: VideoPage, transaction: Transaction): string {
-  return normalizeText(video.title) || transaction.description;
+function displayDownloadableItem(item: SelectedInteractiveItem): string {
+  if (item.item.kind === 'zip') {
+    return `ZIP: ${zipFilename(item.item.link)}`;
+  }
+
+  return normalizeText(item.page?.title ?? '') || item.transaction.description;
+}
+
+function selectedItemCount(selectedItems: Map<string, SelectedInteractiveItem>, transaction: Transaction): number {
+  return [...selectedItems.values()].filter((item) => item.transaction.url === transaction.url).length;
 }
 
 function pageSize(): number {
@@ -1722,13 +1823,13 @@ async function fileSize(filePath: string): Promise<number | undefined> {
   }
 }
 
-async function countDownloadedMp4s(outputRoot: string, transaction: Transaction): Promise<number> {
+async function countDownloadedItems(outputRoot: string, transaction: Transaction): Promise<number> {
   const productDir = path.join(outputRoot, sanitizePathComponent(transaction.description));
 
   try {
     const entries = await readdir(productDir, { withFileTypes: true });
 
-    return entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.mp4')).length;
+    return entries.filter((entry) => entry.isFile() && /\.(mp4|zip)$/i.test(entry.name)).length;
   } catch (error) {
     if (isNodeError(error) && error.code === 'ENOENT') {
       return 0;
