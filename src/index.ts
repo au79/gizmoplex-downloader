@@ -22,6 +22,7 @@ type Options = {
   clearCache: boolean;
   delay?: DelayRange;
   dryRun: boolean;
+  inProgressPlan?: string;
   interactive: boolean;
   out: string;
   showInProgressPlan: boolean;
@@ -160,7 +161,7 @@ type DownloadSummaryRow = {
   unknownSizes: number;
 };
 
-let activeInProgress: { outputRoot: string; planned: PlannedVideoDownload[] } | undefined;
+let activeInProgress: { path: string; planned: PlannedVideoDownload[] } | undefined;
 
 const program = new Command()
   .name('gizmoplex-downloader')
@@ -169,6 +170,7 @@ const program = new Command()
   .option('-i, --interactive', 'select one transaction and choose videos interactively', false)
   .option('--clear-cache', 'clear cached video metadata at app launch', false)
   .option('--out <dirpath>', 'root directory for downloaded files', './gizmoplex-archive/')
+  .option('--in-progress-plan <filepath>', 'path to the in-progress download plan')
   .option('--show-in-progress-plan', 'print the saved in-progress download plan and exit', false)
   .option('--delay <seconds>', 'random delay range between video pages, as min-max seconds')
   .option('--srt', 'select SRT subtitle files', false)
@@ -629,7 +631,7 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
       printDownloadPlan(plannedZip.transactionDescription, plannedZip.videoTitle, plannedZip.videoUrl, plannedZip.downloads, options.dryRun);
 
       if (!options.dryRun) {
-        await downloadPlannedVideos(client, [plannedZip], outputRoot, undefined, false);
+        await downloadPlannedVideos(client, [plannedZip], inProgressPath(outputRoot, options.inProgressPlan), undefined, false);
       }
     }
 
@@ -675,7 +677,7 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
     printDownloadPlan(plannedVideo.transactionDescription, plannedVideo.videoTitle, plannedVideo.videoUrl, plannedVideo.downloads, options.dryRun);
 
     if (!options.dryRun) {
-      await downloadPlannedVideos(client, [plannedVideo], outputRoot, options.delay, false);
+      await downloadPlannedVideos(client, [plannedVideo], inProgressPath(outputRoot, options.inProgressPlan), options.delay, false);
     }
   }
 
@@ -750,7 +752,7 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
     return;
   }
 
-  await downloadPlannedVideos(client, planned, outputRoot, options.delay, false);
+  await downloadPlannedVideos(client, planned, inProgressPath(outputRoot, options.inProgressPlan), options.delay, false);
 }
 
 async function selectItemsForTransaction(
@@ -908,17 +910,18 @@ async function downloadPlannedFiles(client: HttpClient, downloads: PlannedDownlo
 async function downloadPlannedVideos(
   client: HttpClient,
   planned: PlannedVideoDownload[],
-  outputRoot: string,
+  planPath: string,
   delay: DelayRange | undefined,
   deleteInProgressOnSuccess: boolean,
 ): Promise<void> {
   let shouldDelayBeforeNextVideoPage = false;
 
-  activeInProgress = { outputRoot, planned };
+  await ensureDirectory(path.dirname(planPath));
+  activeInProgress = { path: planPath, planned };
 
   try {
     for (const [index, item] of planned.entries()) {
-      activeInProgress = { outputRoot, planned: planned.slice(index) };
+      activeInProgress = { path: planPath, planned: planned.slice(index) };
 
       if (shouldDelayBeforeNextVideoPage && delay) {
         await waitRandomDelay(delay);
@@ -934,10 +937,10 @@ async function downloadPlannedVideos(
     activeInProgress = undefined;
 
     if (deleteInProgressOnSuccess) {
-      await deleteInProgressPlan(outputRoot);
+      await deleteInProgressPlan(planPath);
     }
   } catch (error) {
-    await saveInProgressPlan(outputRoot, activeInProgress?.planned ?? planned);
+    await saveInProgressPlan(planPath, activeInProgress?.planned ?? planned);
     activeInProgress = undefined;
     throw error;
   }
@@ -1712,13 +1715,13 @@ async function ensureDirectory(dirPath: string): Promise<void> {
   }
 }
 
-function inProgressPath(outputRoot: string): string {
-  return path.join(outputRoot, '.in-progress');
+function inProgressPath(outputRoot: string, specifiedPath?: string): string {
+  return specifiedPath ? path.resolve(specifiedPath) : path.join(outputRoot, '.in-progress');
 }
 
-async function readInProgressPlan(outputRoot: string): Promise<InProgressPlan | undefined> {
+async function readInProgressPlan(planPath: string): Promise<InProgressPlan | undefined> {
   try {
-    const raw = await readFile(inProgressPath(outputRoot), 'utf8');
+    const raw = await readFile(planPath, 'utf8');
     const parsed = JSON.parse(raw) as InProgressPlan;
 
     if (parsed.version !== 1 || !Array.isArray(parsed.planned)) {
@@ -1735,13 +1738,14 @@ async function readInProgressPlan(outputRoot: string): Promise<InProgressPlan | 
   }
 }
 
-async function saveInProgressPlan(outputRoot: string, planned: PlannedVideoDownload[]): Promise<void> {
+async function saveInProgressPlan(planPath: string, planned: PlannedVideoDownload[]): Promise<void> {
   if (planned.length === 0) {
     return;
   }
 
-  await writeFile(inProgressPath(outputRoot), serializeInProgressPlan(planned), 'utf8');
-  console.error(`\nSaved current download plan to ${inProgressPath(outputRoot)}`);
+  await ensureDirectory(path.dirname(planPath));
+  await writeFile(planPath, serializeInProgressPlan(planned), 'utf8');
+  console.error(`\nSaved current download plan to ${planPath}`);
 }
 
 function serializeInProgressPlan(planned: PlannedVideoDownload[]): string {
@@ -1754,17 +1758,17 @@ function serializeInProgressPlan(planned: PlannedVideoDownload[]): string {
   return `${JSON.stringify(payload, null, 2)}\n`;
 }
 
-function saveInProgressPlanSync(outputRoot: string, planned: PlannedVideoDownload[]): void {
+function saveInProgressPlanSync(planPath: string, planned: PlannedVideoDownload[]): void {
   if (planned.length === 0) {
     return;
   }
 
-  writeFileSync(inProgressPath(outputRoot), serializeInProgressPlan(planned), 'utf8');
-  console.error(`\nSaved current download plan to ${inProgressPath(outputRoot)}`);
+  writeFileSync(planPath, serializeInProgressPlan(planned), 'utf8');
+  console.error(`\nSaved current download plan to ${planPath}`);
 }
 
-async function deleteInProgressPlan(outputRoot: string): Promise<void> {
-  await rm(inProgressPath(outputRoot), { force: true });
+async function deleteInProgressPlan(planPath: string): Promise<void> {
+  await rm(planPath, { force: true });
 }
 
 async function offerInProgressPlan(client: HttpClient, options: Options): Promise<boolean> {
@@ -1773,7 +1777,8 @@ async function offerInProgressPlan(client: HttpClient, options: Options): Promis
   }
 
   const outputRoot = path.resolve(options.out);
-  const plan = await readInProgressPlan(outputRoot);
+  const planPath = inProgressPath(outputRoot, options.inProgressPlan);
+  const plan = await readInProgressPlan(planPath);
 
   if (!plan) {
     return false;
@@ -1800,7 +1805,7 @@ async function offerInProgressPlan(client: HttpClient, options: Options): Promis
   console.error('');
   console.error('Download summary for saved .in-progress plan:');
   printDownloadSummary(summary, console.error);
-  await downloadPlannedVideos(client, plan.planned, outputRoot, options.delay, true);
+  await downloadPlannedVideos(client, plan.planned, planPath, options.delay, true);
 
   return true;
 }
@@ -2198,10 +2203,11 @@ async function main(): Promise<void> {
 
   if (options.showInProgressPlan) {
     const outputRoot = path.resolve(options.out);
-    const plan = await readInProgressPlan(outputRoot);
+    const planPath = inProgressPath(outputRoot, options.inProgressPlan);
+    const plan = await readInProgressPlan(planPath);
 
     if (!plan) {
-      throw new Error(`No saved .in-progress plan found at ${inProgressPath(outputRoot)}.`);
+      throw new Error(`No saved .in-progress plan found at ${planPath}.`);
     }
 
     console.log(JSON.stringify(plan, null, 2));
@@ -2233,7 +2239,7 @@ const appStartedAt = Date.now();
 
 process.on('SIGINT', () => {
   if (activeInProgress) {
-    saveInProgressPlanSync(activeInProgress.outputRoot, activeInProgress.planned);
+    saveInProgressPlanSync(activeInProgress.path, activeInProgress.planned);
     activeInProgress = undefined;
   }
 
@@ -2244,7 +2250,7 @@ try {
   await main();
 } catch (error) {
   if (activeInProgress) {
-    await saveInProgressPlan(activeInProgress.outputRoot, activeInProgress.planned);
+    await saveInProgressPlan(activeInProgress.path, activeInProgress.planned);
     activeInProgress = undefined;
   }
 
