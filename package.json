@@ -1,0 +1,27 @@
+{
+  "name": "gizmoplex-downloader",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dry-run": "tsx src/index.ts --dry-run",
+    "show-in-progress-plan": "tsx src/index.ts --show-in-progress-plan",
+    "start": "tsx src/index.ts -i"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.4.2",
+    "cheerio": "^1.2.0",
+    "commander": "^14.0.3",
+    "dotenv": "^17.4.2",
+    "progress": "^2.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@types/progress": "^2.0.7",
+    "tsx": "^4.21.0",
+    "typescript": "6.0.3"
+  },
+  "private": true
+}
