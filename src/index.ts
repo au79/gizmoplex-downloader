@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { styleText } from 'node:util';
 import ProgressBar from 'progress';
 import { formatBytes, formatDuration, normalizeText, redactUrl, sanitizePathComponent } from './lib/format.js';
 import { parseOptionalDelayRange, parsePositiveInteger } from './lib/options.js';
@@ -1014,7 +1015,7 @@ async function selectDownloadableItems(
   console.error('');
   console.error('Downloadable items:');
   items.forEach((item) => {
-    const indicator = selectedItems.has(item.item.id) ? '[x]' : '[ ]';
+    const indicator = checkboxIndicator(selectedItems.has(item.item.id));
     console.error(`${indicator} ${displayDownloadableItem(item)}`);
   });
 
@@ -1037,7 +1038,7 @@ async function selectDownloadableItems(
 
     console.error('');
     console.error(selected.length === 0 ? 'No items selected.' : 'Selected items:');
-    selected.forEach((item) => console.error(`[x] ${displayDownloadableItem(item)}`));
+    selected.forEach((item) => console.error(`${checkboxIndicator(true)} ${displayDownloadableItem(item)}`));
 
     const confirmed = await confirm({
       message: 'Use this item selection?',
@@ -1094,6 +1095,10 @@ function displayDownloadableItemDescription(item: SelectedInteractiveItem): stri
   }
 
   return item.item.url;
+}
+
+function checkboxIndicator(selected: boolean): string {
+  return selected ? styleText('green', '●') : '○';
 }
 
 function selectedItemCount(selectedItems: Map<string, SelectedInteractiveItem>, transaction: Transaction): number {
