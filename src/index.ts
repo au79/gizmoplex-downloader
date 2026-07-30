@@ -682,6 +682,7 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
   }
 
   console.error('');
+  printSelectedItemsByTransaction(selectedItems);
   console.error('Download summary for selected items:');
   printDownloadSummary(summary, console.error);
 
@@ -751,7 +752,11 @@ async function selectItemsForTransaction(
     return;
   }
 
-  const selectedForTransaction = await selectDownloadableItems(eligibleItems, selectedItems);
+  const selectedForTransaction = await selectDownloadableItems(
+    eligibleItems,
+    selectedItems,
+    interactiveTransaction.alreadyDownloadedCount,
+  );
 
   if (!selectedForTransaction) {
     return;
@@ -937,7 +942,7 @@ async function selectTransaction(
         description: item.transaction.url,
       })),
       ...(selectedItems.size > 0 ? [{
-        name: 'Confirm selected download?',
+        name: `Review and download selected items (${selectedItems.size})`,
         value: { kind: 'confirm' as const },
         description: `${selectedItems.size} item(s) selected`,
       }] : []),
@@ -1006,65 +1011,25 @@ async function fetchVideosForUrls(client: HttpClient, metadataCache: MetadataCac
   return videos;
 }
 
-type DownloadableItemSelectionAction = 'all' | 'clear' | 'custom' | 'cancel';
-
 async function selectDownloadableItems(
   items: SelectedInteractiveItem[],
   selectedItems: Map<string, SelectedInteractiveItem>,
+  hiddenDownloadedCount: number,
 ): Promise<SelectedInteractiveItem[] | undefined> {
   console.error('');
   console.error('Downloadable items:');
+  if (hiddenDownloadedCount > 0) {
+    console.error(`Downloaded (hidden): ${hiddenDownloadedCount}`);
+  }
   items.forEach((item) => {
     const indicator = checkboxIndicator(selectedItems.has(item.item.id));
     console.error(`${indicator} ${displayDownloadableItem(item)}`);
   });
 
-  while (true) {
-    const action = await select<DownloadableItemSelectionAction>({
-      message: 'Select items',
-      choices: [
-        { name: 'Select all', value: 'all' },
-        { name: 'Clear all', value: 'clear' },
-        { name: 'Choose items', value: 'custom' },
-        { name: 'Cancel', value: 'cancel' },
-      ],
-    }, { output: process.stderr });
+  console.error(`Basket: ${selectedItems.size} item(s) across ${selectedTransactionCount(selectedItems)} transaction(s)`);
+  console.error('Clear this transaction: deselect every item, or choose the clear action after editing.');
 
-    if (action === 'cancel') {
-      return undefined;
-    }
-
-    const selected = await selectedDownloadableItemsForAction(action, items, selectedItems);
-
-    console.error('');
-    console.error(selected.length === 0 ? 'No items selected.' : 'Selected items:');
-    selected.forEach((item) => console.error(`${checkboxIndicator(true)} ${displayDownloadableItem(item)}`));
-
-    const confirmed = await confirm({
-      message: 'Use this item selection?',
-      default: true,
-    }, { output: process.stderr });
-
-    if (confirmed) {
-      return selected;
-    }
-  }
-}
-
-async function selectedDownloadableItemsForAction(
-  action: DownloadableItemSelectionAction,
-  items: SelectedInteractiveItem[],
-  selectedItems: Map<string, SelectedInteractiveItem>,
-): Promise<SelectedInteractiveItem[]> {
-  if (action === 'all') {
-    return items;
-  }
-
-  if (action === 'clear' || action === 'cancel') {
-    return [];
-  }
-
-  return checkbox({
+  const selected = await checkbox({
     message: 'Choose items',
     pageSize: pageSize(),
     required: false,
@@ -1079,6 +1044,21 @@ async function selectedDownloadableItemsForAction(
       checked: selectedItems.has(item.item.id),
     })),
   }, { output: process.stderr });
+
+  const action = await select<'save' | 'clear' | 'back'>({
+    message: 'Apply item changes',
+    choices: [
+      { name: 'Save this transaction selection', value: 'save' },
+      { name: 'Clear this transaction', value: 'clear' },
+      { name: 'Back without changes', value: 'back' },
+    ],
+  }, { output: process.stderr });
+
+  if (action === 'back') {
+    return undefined;
+  }
+
+  return action === 'clear' ? [] : selected;
 }
 
 function displayDownloadableItem(item: SelectedInteractiveItem): string {
@@ -1103,6 +1083,29 @@ function checkboxIndicator(selected: boolean): string {
 
 function selectedItemCount(selectedItems: Map<string, SelectedInteractiveItem>, transaction: Transaction): number {
   return [...selectedItems.values()].filter((item) => item.transaction.url === transaction.url).length;
+}
+
+function selectedTransactionCount(selectedItems: Map<string, SelectedInteractiveItem>): number {
+  return new Set([...selectedItems.values()].map((item) => item.transaction.url)).size;
+}
+
+function printSelectedItemsByTransaction(selectedItems: Map<string, SelectedInteractiveItem>): void {
+  const grouped = new Map<string, SelectedInteractiveItem[]>();
+
+  for (const item of selectedItems.values()) {
+    const items = grouped.get(item.transaction.description) ?? [];
+    items.push(item);
+    grouped.set(item.transaction.description, items);
+  }
+
+  console.error('Selected items:');
+  for (const [transactionDescription, items] of grouped) {
+    console.error(`  ${transactionDescription}`);
+    for (const item of items) {
+      console.error(`    ${checkboxIndicator(true)} ${displayDownloadableItem(item)}`);
+    }
+  }
+  console.error('');
 }
 
 function pageSize(): number {
