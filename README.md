@@ -40,6 +40,15 @@ Start the interactive picker:
 pnpm start
 ```
 
+Archive every discovered item without prompts:
+
+```sh
+pnpm exec tsx src/index.ts
+```
+
+This non-interactive mode starts downloading each item as it is planned. Use a
+dry run first if you want to review the archive before transferring files.
+
 Preview what would be downloaded, including file sizes and items that already
 exist locally:
 
@@ -80,7 +89,8 @@ pnpm exec tsx src/index.ts --help
 ```
 
 The project was developed with [OpenAI Codex](https://openai.com/codex/). See
-[AGENTS.md](AGENTS.md) for contributor guidance.
+[AGENTS.md](AGENTS.md) for contributor guidance and
+[docs/specifications.md](docs/specifications.md) for supported behavior.
 
 ## License
 
