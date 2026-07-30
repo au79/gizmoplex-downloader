@@ -1013,8 +1013,9 @@ async function selectDownloadableItems(
 ): Promise<SelectedInteractiveItem[] | undefined> {
   console.error('');
   console.error('Downloadable items:');
-  items.forEach((item, index) => {
-    console.error(`${String(index + 1).padStart(3, ' ')}. ${displayDownloadableItem(item)}`);
+  items.forEach((item) => {
+    const indicator = selectedItems.has(item.item.id) ? '[x]' : '[ ]';
+    console.error(`${indicator} ${displayDownloadableItem(item)}`);
   });
 
   while (true) {
@@ -1036,7 +1037,7 @@ async function selectDownloadableItems(
 
     console.error('');
     console.error(selected.length === 0 ? 'No items selected.' : 'Selected items:');
-    selected.forEach((item, index) => console.error(`${String(index + 1).padStart(3, ' ')}. ${displayDownloadableItem(item)}`));
+    selected.forEach((item) => console.error(`[x] ${displayDownloadableItem(item)}`));
 
     const confirmed = await confirm({
       message: 'Use this item selection?',
