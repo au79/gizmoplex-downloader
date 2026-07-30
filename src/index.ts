@@ -12,6 +12,8 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { styleText } from 'node:util';
 import ProgressBar from 'progress';
+import { resolveDownloadPathCollisions } from './lib/download-paths.js';
+import { assertDownloadedSize, isVerifiedDownload } from './lib/download-verification.js';
 import { formatBytes, formatDuration, normalizeText, redactUrl, sanitizePathComponent } from './lib/format.js';
 import { parseOptionalDelayRange, parsePositiveInteger } from './lib/options.js';
 import type { DelayRange } from './lib/options.js';
@@ -36,6 +38,7 @@ type Options = {
   srt: boolean;
   timeout: number;
   vtt: boolean;
+  yes: boolean;
 };
 
 type CliOptions = Omit<Options, 'delay'> & {
@@ -114,6 +117,7 @@ type TransactionMenuSelection =
   | { kind: 'transaction'; transaction: InteractiveTransaction };
 
 type PlannedDownload = {
+  expectedSizeBytes?: number;
   extension: string;
   kind: 'video' | 'subtitle' | 'zip';
   label: string;
@@ -159,6 +163,7 @@ const program = new Command()
   .option('--out <dirpath>', 'root directory for downloaded files', './gizmoplex-archive/')
   .option('--in-progress-plan <filepath>', 'path to the in-progress download plan')
   .option('--show-in-progress-plan', 'print the saved in-progress download plan and exit', false)
+  .option('-y, --yes', 'skip the non-interactive download confirmation', false)
   .option('--delay <seconds>', 'random delay range between video pages, as min-max seconds')
   .option('--srt', 'select SRT subtitle files', false)
   .option('--vtt', 'select VTT subtitle files', false)
@@ -342,6 +347,7 @@ class HttpClient {
         progressStream,
         createWriteStream(tempPath),
       );
+      assertDownloadedSize(resourceDescription, totalBytes, downloadedBytes);
       finishProgressBar(progress, downloadedBytes, totalBytes, startedAt);
       await rename(tempPath, filePath);
     } catch (error) {
@@ -544,14 +550,13 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
   const outputRoot = path.resolve(options.out);
   await ensureDirectory(outputRoot);
   const metadataCache = new MetadataCache(outputRoot);
-
   const output = options.dryRun ? console.log : console.error;
-  const summary = createDownloadSummary();
 
   output('');
   output(options.dryRun ? 'Dry run archive plan:' : 'Archive downloads:');
 
   const videoQueue: Array<{ transaction: Transaction; videoUrl: string }> = [];
+  const planned: PlannedVideoDownload[] = [];
 
   for (const transaction of transactions) {
     const productPage = await client.get(transaction.url, undefined, `product page for ${transaction.description}`);
@@ -559,23 +564,12 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
     const zipLinks = extractZipDownloadLinks(productPage.body, productPage.url);
 
     for (const zipLink of zipLinks) {
-      const plannedZip: PlannedVideoDownload = {
-        downloads: await planZipDownload(client, transaction, zipLink, outputRoot, options),
+      planned.push({
+        downloads: await planZipDownload(client, transaction, zipLink, outputRoot),
         transactionDescription: transaction.description,
         videoTitle: zipFilename(zipLink),
         videoUrl: zipLink.url,
-      };
-
-      for (const download of plannedZip.downloads) {
-        addSummaryDownload(summary.required, download);
-        addSummaryDownload(download.skip ? summary.alreadyDownloaded : summary.remaining, download);
-      }
-
-      printDownloadPlan(plannedZip.transactionDescription, plannedZip.videoTitle, plannedZip.videoUrl, plannedZip.downloads, options.dryRun);
-
-      if (!options.dryRun) {
-        await downloadPlannedVideos(client, [plannedZip], inProgressPath(outputRoot, options.inProgressPlan), undefined, false);
-      }
+      });
     }
 
     if (videoUrls.length === 0 && zipLinks.length === 0) {
@@ -588,13 +582,7 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
     videoQueue.push(...videoUrls.map((videoUrl) => ({ transaction, videoUrl })));
   }
 
-  let shouldDelayBeforeNextVideoPage = false;
-
   for (const [index, item] of videoQueue.entries()) {
-    if (shouldDelayBeforeNextVideoPage && options.delay) {
-      await waitRandomDelay(options.delay);
-    }
-
     output('');
     output(`${index + 1} of ${videoQueue.length}`);
 
@@ -604,29 +592,42 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
       pageTitleCandidates: video.pageTitleCandidates,
       url: video.pageUrl,
     }, video.title, outputRoot, options, video.vhxVideo, video.vimeoConfig);
-    const plannedVideo: PlannedVideoDownload = {
+    planned.push({
       downloads,
       transactionDescription: item.transaction.description,
       videoTitle: video.title,
       videoUrl: item.videoUrl,
-    };
-    shouldDelayBeforeNextVideoPage = downloads.some((download) => !download.skip);
+    });
+  }
 
-    for (const download of downloads) {
-      addSummaryDownload(summary.required, download);
-      addSummaryDownload(download.skip ? summary.alreadyDownloaded : summary.remaining, download);
-    }
+  const resolvedPlan = await resolvePlannedDownloadPaths(planned);
+  const summary = summaryForPlan(resolvedPlan);
 
-    printDownloadPlan(plannedVideo.transactionDescription, plannedVideo.videoTitle, plannedVideo.videoUrl, plannedVideo.downloads, options.dryRun);
-
-    if (!options.dryRun) {
-      await downloadPlannedVideos(client, [plannedVideo], inProgressPath(outputRoot, options.inProgressPlan), options.delay, false);
-    }
+  for (const item of resolvedPlan) {
+    printDownloadPlan(item.transactionDescription, item.videoTitle, item.videoUrl, item.downloads, options.dryRun);
   }
 
   if (options.dryRun) {
     printDownloadSummary(summary, console.log);
+    return;
   }
+
+  console.error('Download summary:');
+  printDownloadSummary(summary, console.error);
+
+  if (!options.yes) {
+    const confirmedDownload = await confirm({
+      message: 'Download planned files now?',
+      default: false,
+    }, { output: process.stderr });
+
+    if (!confirmedDownload) {
+      console.error('Download cancelled.');
+      return;
+    }
+  }
+
+  await downloadPlannedVideos(client, resolvedPlan, inProgressPath(outputRoot, options.inProgressPlan), options.delay, false);
 }
 
 async function processInteractiveArchive(client: HttpClient, transactions: Transaction[], options: Options): Promise<void> {
@@ -650,7 +651,7 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
   const planned = await Promise.all([...selectedItems.values()].map(async (selected): Promise<PlannedVideoDownload> => {
     if (selected.item.kind === 'zip') {
       return {
-        downloads: await planZipDownload(client, selected.transaction, selected.item.link, outputRoot, { ...options, dryRun: true }),
+        downloads: await planZipDownload(client, selected.transaction, selected.item.link, outputRoot),
         transactionDescription: selected.transaction.description,
         videoTitle: zipFilename(selected.item.link),
         videoUrl: selected.item.link.url,
@@ -666,20 +667,14 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
         downloadLinks: selected.page.downloadLinks,
         pageTitleCandidates: selected.page.pageTitleCandidates,
         url: selected.page.url,
-      }, selected.page.title, outputRoot, { ...options, dryRun: true }, selected.page.vhxVideo, selected.page.vimeoConfig),
+      }, selected.page.title, outputRoot, options, selected.page.vhxVideo, selected.page.vimeoConfig),
       transactionDescription: selected.transaction.description,
       videoTitle: selected.page.title,
       videoUrl: selected.page.url,
     };
   }));
-  const summary = createDownloadSummary();
-
-  for (const item of planned) {
-    for (const download of item.downloads) {
-      addSummaryDownload(summary.required, download);
-      addSummaryDownload(download.skip ? summary.alreadyDownloaded : summary.remaining, download);
-    }
-  }
+  const resolvedPlan = await resolvePlannedDownloadPaths(planned);
+  const summary = summaryForPlan(resolvedPlan);
 
   console.error('');
   printSelectedItemsByTransaction(selectedItems);
@@ -696,7 +691,7 @@ async function processInteractiveArchive(client: HttpClient, transactions: Trans
     return;
   }
 
-  await downloadPlannedVideos(client, planned, inProgressPath(outputRoot, options.inProgressPlan), options.delay, false);
+  await downloadPlannedVideos(client, resolvedPlan, inProgressPath(outputRoot, options.inProgressPlan), options.delay, false);
 }
 
 async function selectItemsForTransaction(
@@ -722,7 +717,7 @@ async function selectItemsForTransaction(
     }
 
     if (item.kind === 'zip') {
-      const downloads = await planZipDownload(client, transaction, item.link, outputRoot, options);
+      const downloads = await planZipDownload(client, transaction, item.link, outputRoot);
 
       if (!downloads.every((download) => download.skip)) {
         eligibleItems.push({ item, transaction });
@@ -802,14 +797,16 @@ async function planVideoDownloads(
     const extension = extensionForDownload(link);
     const filePath = path.join(productDir, `${sanitizePathComponent(videoTitle)}.${extension}`);
     const existingSize = await fileSize(filePath);
-    const skip = existingSize !== undefined;
+    const expectedSizeBytes = await client.contentLength(link.url, `${link.kind} ${link.label || extension} for ${pageTitle}`);
+    const skip = isVerifiedDownload(existingSize, expectedSizeBytes);
 
     return {
+      expectedSizeBytes,
       extension,
       kind: link.kind === 'subtitle' ? 'subtitle' : 'video',
       label: link.label,
       path: filePath,
-      sizeBytes: skip ? existingSize : options.dryRun ? await client.contentLength(link.url, `${link.kind} ${link.label || extension} for ${pageTitle}`) : undefined,
+      sizeBytes: expectedSizeBytes ?? existingSize,
       skip,
       url: link.url,
     };
@@ -821,33 +818,62 @@ async function planZipDownload(
   transaction: Transaction,
   link: DownloadLink,
   outputRoot: string,
-  options: Options,
 ): Promise<PlannedDownload[]> {
   const productDir = path.join(outputRoot, sanitizePathComponent(transaction.description));
   const filename = sanitizePathComponent(zipFilename(link));
   const filePath = path.join(productDir, filename.toLowerCase().endsWith('.zip') ? filename : `${filename}.zip`);
   const existingSize = await fileSize(filePath);
+  const expectedSizeBytes = await client.contentLength(link.url, `ZIP ${filename}`);
 
   await ensureDirectory(productDir);
 
   return [{
+    expectedSizeBytes,
     extension: 'zip',
     kind: 'zip',
     label: link.label,
     path: filePath,
-    sizeBytes: existingSize ?? (options.dryRun ? await client.contentLength(link.url, `ZIP ${filename}`) : undefined),
-    skip: existingSize !== undefined,
+    sizeBytes: expectedSizeBytes ?? existingSize,
+    skip: isVerifiedDownload(existingSize, expectedSizeBytes),
     url: link.url,
   }];
 }
 
+async function resolvePlannedDownloadPaths(planned: PlannedVideoDownload[]): Promise<PlannedVideoDownload[]> {
+  const resolvedDownloads = resolveDownloadPathCollisions(planned.flatMap((item) => item.downloads));
+  let index = 0;
+
+  return Promise.all(planned.map(async (item) => ({
+    ...item,
+    downloads: await Promise.all(item.downloads.map(async () => {
+      const download = resolvedDownloads[index++];
+      const existingSize = await fileSize(download.path);
+
+      return {
+        ...download,
+        sizeBytes: download.expectedSizeBytes ?? existingSize,
+        skip: isVerifiedDownload(existingSize, download.expectedSizeBytes),
+      };
+    })),
+  })));
+}
+
+function summaryForPlan(planned: PlannedVideoDownload[]) {
+  const summary = createDownloadSummary();
+
+  for (const item of planned) {
+    for (const download of item.downloads) {
+      addSummaryDownload(summary.required, download);
+      addSummaryDownload(download.skip ? summary.alreadyDownloaded : summary.remaining, download);
+    }
+  }
+
+  return summary;
+}
+
 async function downloadPlannedFiles(client: HttpClient, downloads: PlannedDownload[]): Promise<void> {
   for (const download of downloads) {
-    if (download.skip) {
-      continue;
-    }
-
-    if (await fileSize(download.path) !== undefined) {
+    if (isVerifiedDownload(await fileSize(download.path), download.expectedSizeBytes)) {
       continue;
     }
 
