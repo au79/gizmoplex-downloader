@@ -100,7 +100,7 @@ type DownloadLink = {
 
 type PlannedDownload = {
   extension: string;
-  kind: 'video' | 'subtitle';
+  kind: 'video' | 'subtitle' | 'zip';
   label: string;
   path: string;
   sizeBytes?: number;
@@ -133,7 +133,7 @@ type ApiTransaction = {
   product_url?: unknown;
 };
 
-type CountedFileType = 'mp4' | 'srt' | 'vtt';
+type CountedFileType = 'mp4' | 'srt' | 'vtt' | 'zip';
 
 type DownloadSummary = {
   alreadyDownloaded: DownloadSummaryRow;
@@ -598,8 +598,29 @@ async function processArchive(client: HttpClient, transactions: Transaction[], o
   for (const transaction of transactions) {
     const productPage = await client.get(transaction.url, undefined, `product page for ${transaction.description}`);
     const videoUrls = extractVideoUrls(productPage.body, productPage.url);
+    const zipLinks = extractZipDownloadLinks(productPage.body, productPage.url);
 
-    if (videoUrls.length === 0) {
+    for (const zipLink of zipLinks) {
+      const plannedZip: PlannedVideoDownload = {
+        downloads: await planZipDownload(client, transaction, zipLink, outputRoot, options),
+        transactionDescription: transaction.description,
+        videoTitle: zipFilename(zipLink),
+        videoUrl: zipLink.url,
+      };
+
+      for (const download of plannedZip.downloads) {
+        addSummaryDownload(summary.required, download);
+        addSummaryDownload(download.skip ? summary.alreadyDownloaded : summary.remaining, download);
+      }
+
+      printDownloadPlan(plannedZip.transactionDescription, plannedZip.videoTitle, plannedZip.videoUrl, plannedZip.downloads, options.dryRun);
+
+      if (!options.dryRun) {
+        await downloadPlannedVideos(client, [plannedZip], outputRoot, undefined, false);
+      }
+    }
+
+    if (videoUrls.length === 0 && zipLinks.length === 0) {
       output('');
       output(`${transaction.description}`);
       output('  No video pages found.');
@@ -759,6 +780,31 @@ async function planVideoDownloads(
       url: link.url,
     };
   }));
+}
+
+async function planZipDownload(
+  client: HttpClient,
+  transaction: Transaction,
+  link: DownloadLink,
+  outputRoot: string,
+  options: Options,
+): Promise<PlannedDownload[]> {
+  const productDir = path.join(outputRoot, sanitizePathComponent(transaction.description));
+  const filename = sanitizePathComponent(zipFilename(link));
+  const filePath = path.join(productDir, filename.toLowerCase().endsWith('.zip') ? filename : `${filename}.zip`);
+  const existingSize = await fileSize(filePath);
+
+  await ensureDirectory(productDir);
+
+  return [{
+    extension: 'zip',
+    kind: 'zip',
+    label: link.label,
+    path: filePath,
+    sizeBytes: existingSize ?? (options.dryRun ? await client.contentLength(link.url, `ZIP ${filename}`) : undefined),
+    skip: existingSize !== undefined,
+    url: link.url,
+  }];
 }
 
 async function downloadPlannedFiles(client: HttpClient, downloads: PlannedDownload[]): Promise<void> {
@@ -1094,6 +1140,10 @@ function extractDownloadLinks(html: string, pageUrl: string): DownloadLink[] {
   return links;
 }
 
+function extractZipDownloadLinks(html: string, pageUrl: string): DownloadLink[] {
+  return extractDownloadLinks(html, pageUrl).filter((link) => link.kind === 'zip');
+}
+
 function selectHighestResolutionVideo(links: DownloadLink[]): DownloadLink | undefined {
   const videos = links.filter((link) => link.kind === 'video');
 
@@ -1139,6 +1189,12 @@ function extensionForDownload(link: DownloadLink): string {
   }
 
   return 'mp4';
+}
+
+function zipFilename(link: DownloadLink): string {
+  const fromUrl = path.basename(new URL(link.url).pathname);
+
+  return fromUrl || link.label || 'download.zip';
 }
 
 async function fetchVhxVideo(
@@ -1381,7 +1437,7 @@ function dedupeLinks(links: DownloadLink[]): DownloadLink[] {
 }
 
 function isLikelyDownloadUrl(url: string, label: string): boolean {
-  return /download|subtitle|caption|\.srt(?:[?#]|$)|\.vtt(?:[?#]|$)|\.mp4(?:[?#]|$)|\.m4v(?:[?#]|$)|\.mov(?:[?#]|$)|\.m3u8(?:[?#]|$)|\.mpd(?:[?#]|$)/i.test(`${url} ${label}`);
+  return /download|subtitle|caption|\.zip(?:[?#]|$)|\.srt(?:[?#]|$)|\.vtt(?:[?#]|$)|\.mp4(?:[?#]|$)|\.m4v(?:[?#]|$)|\.mov(?:[?#]|$)|\.m3u8(?:[?#]|$)|\.mpd(?:[?#]|$)/i.test(`${url} ${label}`);
 }
 
 function linkKind(url: string, label: string): string {
@@ -1393,6 +1449,10 @@ function linkKind(url: string, label: string): string {
 
   if (/\.m3u8(?:[?#]|$)|\.mpd(?:[?#]|$)/i.test(value)) {
     return 'stream';
+  }
+
+  if (/\.zip(?:[?#]|$)/i.test(value)) {
+    return 'zip';
   }
 
   return 'video';
@@ -1934,6 +1994,7 @@ function createDownloadSummaryRow(): DownloadSummaryRow {
       mp4: 0,
       srt: 0,
       vtt: 0,
+      zip: 0,
     },
     sizeBytes: 0,
     unknownSizes: 0,
@@ -1957,7 +2018,7 @@ function addSummaryDownload(row: DownloadSummaryRow, download: PlannedDownload):
 function countedFileType(extension: string): CountedFileType | undefined {
   const normalized = extension.toLowerCase();
 
-  if (normalized === 'mp4' || normalized === 'srt' || normalized === 'vtt') {
+  if (normalized === 'mp4' || normalized === 'srt' || normalized === 'vtt' || normalized === 'zip') {
     return normalized;
   }
 
@@ -1966,7 +2027,7 @@ function countedFileType(extension: string): CountedFileType | undefined {
 
 function printDownloadSummary(summary: DownloadSummary, output: (message?: unknown) => void): void {
   const rows = [
-    ['Section', 'Size', 'MP4', 'VTT', 'SRT', 'Unknown'],
+    ['Section', 'Size', 'MP4', 'ZIP', 'VTT', 'SRT', 'Unknown'],
     downloadSummaryRow('Already downloaded', summary.alreadyDownloaded),
     downloadSummaryRow('Remaining download', summary.remaining),
     downloadSummaryRow('Total required', summary.required),
@@ -1984,6 +2045,7 @@ function downloadSummaryRow(label: string, row: DownloadSummaryRow): string[] {
     label,
     formatBytes(row.sizeBytes),
     String(row.counts.mp4),
+    String(row.counts.zip),
     String(row.counts.vtt),
     String(row.counts.srt),
     String(row.unknownSizes),
