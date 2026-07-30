@@ -22,6 +22,15 @@ describe('link discovery and selection', () => {
       expect(links.map((link) => link.kind)).toEqual(expect.arrayContaining(['subtitle', 'stream', 'zip', 'video']));
       expect(links.some((link) => link.url === 'https://cdn.test/raw.mp4')).toBe(true);
     });
+
+    it('deduplicates the repeated signed album link and preserves its filename', () => {
+      const signedAlbumUrl = 'https://cdn.test/uploads/uuid.zip?response-content-disposition=attachment%3Bfilename%3D%22album-songs-in-the-key-of-mst.zip%22%3Bfilename%2A%3DUTF-8%27%27album-songs-in-the-key-of-mst.zip&Signature=private';
+      const html = `<a href="${signedAlbumUrl}">cover</a><a href="${signedAlbumUrl}">ALBUM: Songs in the Key of MST</a>`;
+      const links = extractZipDownloadLinks(html, 'https://www.gizmoplex.com/products/experiment085');
+
+      expect(links).toHaveLength(1);
+      expect(zipFilename(links[0])).toBe('album-songs-in-the-key-of-mst.zip');
+    });
   });
 
   describe('download choices', () => {

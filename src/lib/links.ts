@@ -114,7 +114,20 @@ export function extensionForDownload(link: DownloadLink): string {
 }
 
 export function zipFilename(link: DownloadLink): string {
-  return path.basename(new URL(link.url).pathname) || link.label || 'download.zip';
+  const url = new URL(link.url);
+  const disposition = url.searchParams.get('response-content-disposition') ?? '';
+  const extendedFilename = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+
+  if (extendedFilename) {
+    try {
+      return decodeURIComponent(extendedFilename);
+    } catch {
+      return extendedFilename;
+    }
+  }
+
+  return filename || path.basename(url.pathname) || link.label || 'download.zip';
 }
 
 export function parseSubtitleFormat(value: string): SubtitleFormat | undefined {
