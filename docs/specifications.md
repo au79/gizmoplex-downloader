@@ -31,6 +31,24 @@ creation, payment, content sharing, or access-control bypasses.
 
 - The application MUST authenticate through the Gizmoplex login flow and read
   transactions from its customer transaction endpoint.
+- The application MUST cache fetched transactions under
+  `<output>/.cache/transactions` as distilled records containing at least the
+  transaction date, product name, and product URL. The cache MUST NOT contain
+  credentials or unnecessary response data.
+- When a valid transaction cache exists, the CLI SHOULD display and process the
+  cached transactions immediately while it fetches the current transaction
+  list. This cache-first behavior is appropriate because transaction products,
+  video pages, and their links are expected to remain stable through the
+  planned site shutdown in September.
+- The CLI MUST still attempt the fetch on every authenticated run so changes
+  before shutdown can be detected and the cache refreshed.
+- After a successful fetch, the CLI MUST compare the fetched transaction list
+  with the cached list and replace the cache only when the records differ. If
+  the lists are identical, the cache MUST remain unchanged.
+- If a refresh returns changed transactions, the CLI MUST use the refreshed
+  list for subsequent planning and replace the cache. If the refresh fails, a
+  valid cache MAY continue to drive planning, but the CLI MUST report that it
+  is using cached data.
 - Each transaction MUST retain its date, product name, and product URL.
 - The product URL MUST be inspected for video pages and downloadable ZIP
   assets.
@@ -48,7 +66,8 @@ creation, payment, content sharing, or access-control bypasses.
 - Video metadata MUST be cached under `<output>/.cache/videos` and reused when
   available.
 - Cached records MUST contain distilled metadata rather than raw page HTML.
-- `--clear-cache` MUST remove the metadata cache before discovery.
+- `--clear-cache` MUST remove all metadata caches, including transaction and
+  video caches, before discovery.
 - The preferred video-title order is Vimeo `video.title`, VHX `title`, VHX
   `name`, then page metadata. Placeholder titles such as `untitled` MUST NOT
   be selected when a better value exists.

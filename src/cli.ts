@@ -8,7 +8,7 @@ export function parseOptions(argv = process.argv): Options {
     .description('List purchased Gizmoplex transactions.')
     .option('--dry-run', 'show what would be downloaded without writing files', false)
     .option('-i, --interactive', 'select one transaction and choose videos interactively', false)
-    .option('--clear-cache', 'clear cached video metadata at app launch', false)
+    .option('--clear-cache', 'clear cached transactions and video metadata at app launch', false)
     .option('--out <dirpath>', 'root directory for downloaded files', './gizmoplex-archive/')
     .option('--in-progress-plan <filepath>', 'path to the in-progress download plan')
     .option('--show-in-progress-plan', 'print the saved in-progress download plan and exit', false)

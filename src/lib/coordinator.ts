@@ -6,6 +6,7 @@ import type { Options, PlannedDownload, PlannedVideoDownload, Transaction, Video
 import { login, type HttpClient } from './http-client.js';
 import { fetchTransactions } from './transactions.js';
 import { MetadataCache } from './metadata-cache.js';
+import { TransactionCache } from './transaction-cache.js';
 import { extractPageTitleCandidates, fetchVideoMetadata, fetchVideosForUrls } from './video-discovery.js';
 import { extractVideoUrls, extractZipDownloadLinks, zipFilename } from './links.js';
 import { planVideoDownloads, planZipDownload, resolvePlannedDownloadPaths, summaryForPlan } from './archive-planning.js';
@@ -32,19 +33,51 @@ export async function runApplication(options: Options): Promise<void> {
       return;
     }
     if (options.clearCache) await new MetadataCache(outputRoot, ensureDirectory, extractPageTitleCandidates).clear();
+    const transactionCache = new TransactionCache(outputRoot, ensureDirectory);
+    const cachedTransactions = await transactionCache.read();
+    if (cachedTransactions) {
+      console.error('Cached transactions:');
+      printTransactions(cachedTransactions);
+    }
     const client = await login(await readEmail(), await readPassword(), options.timeout);
-    const transactions = await fetchTransactions(client);
-    if (await offerSavedPlan(client, options, controller)) return;
+    const refreshedTransactions = fetchAndCacheTransactions(client, transactionCache, cachedTransactions);
+    if (await offerSavedPlan(client, options, controller)) { await refreshedTransactions; return; }
     if (options.interactive) {
+      const transactions = await refreshedTransactions;
       await processInteractiveArchive(client, transactions, options, controller, (planned, planPath, delay) => executePlan(client, planned, planPath, delay, false, controller));
     } else {
-      printTransactions(transactions);
+      const transactions = cachedTransactions ?? await refreshedTransactions;
+      if (!cachedTransactions) printTransactions(transactions);
       await processArchive(client, transactions, options, controller);
+      await refreshedTransactions;
     }
   } finally {
     process.off('SIGINT', signalHandler);
     if (!options.showInProgressPlan) (options.dryRun ? console.log : console.error)(`Total runtime: ${formatDuration(Date.now() - startedAt)}`);
   }
+}
+
+export async function fetchAndCacheTransactions(client: HttpClient, cache: TransactionCache, cachedTransactions: Transaction[] | undefined): Promise<Transaction[]> {
+  try {
+    const fetchedTransactions = await fetchTransactions(client);
+    if (!cachedTransactions || !sameTransactions(cachedTransactions, fetchedTransactions)) await cache.write(fetchedTransactions);
+    if (cachedTransactions && !sameTransactions(cachedTransactions, fetchedTransactions)) {
+      console.error('Updated transactions:');
+      printTransactions(fetchedTransactions);
+    }
+    return fetchedTransactions;
+  } catch (error) {
+    if (!cachedTransactions) throw error;
+    console.error(`Could not refresh transactions; using cached data: ${errorMessage(error)}`);
+    return cachedTransactions;
+  }
+}
+
+function sameTransactions(left: Transaction[], right: Transaction[]): boolean {
+  return left.length === right.length && left.every((transaction, index) => {
+    const other = right[index];
+    return transaction.date === other.date && transaction.description === other.description && transaction.url === other.url;
+  });
 }
 
 export function createInterruptHandler(controller: { saveSync(): void }, exit: (code: number) => never = process.exit): () => void {

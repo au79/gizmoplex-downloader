@@ -87,7 +87,7 @@ docker run --rm \
   gizmoplex-downloader --out /archive --yes
 ```
 The `/archive` volume also retains interrupted `.in-progress` plans and the
-metadata cache between containers.
+transaction and video metadata caches between containers.
 
 Useful options:
 
@@ -96,7 +96,9 @@ Useful options:
   `./gizmoplex-archive/`).
 - `--srt` / `--vtt` — select subtitle formats; SRT is the default when neither
   option is given.
-- `--clear-cache` — discard cached video metadata before starting.
+- `--clear-cache` — discard cached transactions and video metadata before
+  starting. Transactions are refreshed on every run and the cache is replaced
+  only when the fetched list changes.
 - `--delay <min-max>` — wait a random number of seconds between downloadable
   items, such as `--delay 1-10`. This is courtesy pacing to avoid overtaxing
   upstream servers or making the request pattern appear malicious; individual
