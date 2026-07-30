@@ -133,5 +133,5 @@ Before submitting a change, run:
 ```sh
 pnpm test
 pnpm run build
-pnpm exec tsx src/index.ts --help
+pnpm exec tsx src/app.ts --help
 ```

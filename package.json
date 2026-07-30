@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
-    "dry-run": "tsx src/index.ts --dry-run",
-    "show-in-progress-plan": "tsx src/index.ts --show-in-progress-plan",
-    "start": "tsx src/index.ts -i",
+    "dry-run": "tsx src/app.ts --dry-run",
+    "show-in-progress-plan": "tsx src/app.ts --show-in-progress-plan",
+    "start": "tsx src/app.ts -i",
     "test": "vitest run src",
     "test:coverage": "vitest run src --coverage"
   },

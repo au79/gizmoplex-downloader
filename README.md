@@ -43,7 +43,7 @@ pnpm start
 Archive every discovered item without prompts:
 
 ```sh
-pnpm exec tsx src/index.ts
+pnpm exec tsx src/app.ts
 ```
 
 This non-interactive mode shows the complete plan and asks for confirmation
@@ -59,7 +59,7 @@ pnpm dry-run
 Download to a different directory and include both subtitle formats:
 
 ```sh
-pnpm exec tsx src/index.ts --out ./archive --srt --vtt
+pnpm exec tsx src/app.ts --out ./archive --srt --vtt
 ```
 
 Useful options:
@@ -76,7 +76,7 @@ Useful options:
   logging in.
 - `-y, --yes` — bypass the confirmation prompt in non-interactive mode.
 
-Run `pnpm exec tsx src/index.ts --help` for the full option list.
+Run `pnpm exec tsx src/app.ts --help` for the full option list.
 
 Interrupted non-dry-run downloads save a resumable plan in the output
 directory. The next run can use that plan instead of repeating selection.
@@ -86,7 +86,7 @@ directory. The next run can use that plan instead of repeating selection.
 ```sh
 pnpm test
 pnpm run build
-pnpm exec tsx src/index.ts --help
+pnpm exec tsx src/app.ts --help
 ```
 
 The project was developed with [OpenAI Codex](https://openai.com/codex/). See

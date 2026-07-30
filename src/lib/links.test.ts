@@ -50,6 +50,8 @@ describe('link discovery and selection', () => {
       expect(zipFilename({ kind: 'zip', label: '', url: 'https://cdn.test/a%20file.zip?token=x' })).toBe('a%20file.zip');
       expect(zipFilename({ kind: 'zip', label: 'Bonus', url: 'https://cdn.test/' })).toBe('Bonus');
       expect(zipFilename({ kind: 'zip', label: '', url: 'https://cdn.test/' })).toBe('download.zip');
+      expect(zipFilename({ kind: 'zip', label: '', url: "https://cdn.test/a.zip?response-content-disposition=filename%2A%3DUTF-8%27%27%25E0%25A4%25A" })).toBe('%E0%A4%A');
+      expect(extractZipDownloadLinks('<a href="https://cdn.test/download.zip">one</a><a href="https://cdn.test/download.zip">two</a>', 'https://product')).toHaveLength(1);
       expect(selectHighestResolutionVideo([{ kind: 'video', label: 'source', url: 'https://cdn.test/plain.mp4' }])?.url).toContain('plain.mp4');
       expect(selectHighestResolutionVideo([])).toBeUndefined();
       expect(selectSubtitleLinks([...links, { kind: 'video', label: '', url: 'https://cdn.test/x.mp4' }, { kind: 'subtitle', label: 'unknown', url: 'https://cdn.test/x.txt' }], new Set(['srt']))).toHaveLength(1);
