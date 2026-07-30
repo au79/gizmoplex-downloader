@@ -6,6 +6,9 @@ This document describes the supported behavior of the CLI. It is an
 implementation specification, not a guarantee that Gizmoplex or its upstream
 providers will continue to expose the same pages and APIs.
 
+The [accepted requirements awaiting implementation](#accepted-requirements-awaiting-implementation)
+section records approved behavior that is not present in the current release.
+
 The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are used as described
 by [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -124,3 +127,16 @@ pnpm test
 pnpm run build
 pnpm exec tsx src/index.ts --help
 ```
+
+## Accepted requirements awaiting implementation
+
+- A default non-interactive run MUST build and display the complete archive
+  plan and summary before transferring files. It MUST require confirmation;
+  `--yes` MAY explicitly bypass that confirmation for unattended runs.
+- When distinct assets would resolve to the same destination path, the CLI MUST
+  preserve both files by appending a deterministic, source-derived suffix before
+  the extension.
+- The CLI MUST write each download to a temporary file and rename it only after
+  success. When the response provides `Content-Length`, the streamed byte count
+  MUST match it before rename. A cryptographic digest MUST be checked when a
+  trusted expected digest is available from the source.
