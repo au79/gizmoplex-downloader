@@ -34,4 +34,12 @@ describe('credentials', () => {
 
     await expect(readEmail()).resolves.toBe('rev');
   });
+
+  it('removes quotes preserved by Docker env files', async () => {
+    process.env.GIZMOPLEX_EMAIL = '"rev@example.test"';
+    process.env.GIZMOPLEX_PASSWORD = "'secret'";
+
+    await expect(readEmail()).resolves.toBe('rev@example.test');
+    await expect(readPassword()).resolves.toBe('secret');
+  });
 });

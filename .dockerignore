@@ -1,0 +1,13 @@
+.dockerignore
+.env
+.git
+.gitignore
+.idea
+.pnpm-store
+.vscode
+coverage
+dist
+gizmoplex-archive
+node_modules
+*.log
+*.DS_Store

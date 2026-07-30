@@ -62,6 +62,33 @@ Download to a different directory and include both subtitle formats:
 pnpm exec tsx src/app.ts --out ./archive --srt --vtt
 ```
 
+## Docker
+
+Build the image from the repository root:
+
+```sh
+pnpm docker:build
+```
+
+Run with credentials from the local `.env` file and persist downloads in the
+repository's `gizmoplex-archive` directory:
+
+```sh
+pnpm docker:run
+```
+
+For an unattended non-interactive run, use the equivalent command with
+`--yes` instead of `--interactive`:
+
+```sh
+docker run --rm \
+  --env-file .env \
+  --volume "$PWD/gizmoplex-archive:/archive" \
+  gizmoplex-downloader --out /archive --yes
+```
+The `/archive` volume also retains interrupted `.in-progress` plans and the
+metadata cache between containers.
+
 Useful options:
 
 - `-i, --interactive` — choose transactions and items before downloading.

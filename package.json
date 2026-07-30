@@ -6,6 +6,8 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
+    "docker:build": "docker build -t gizmoplex-downloader .",
+    "docker:run": "docker run --rm -it --env-file .env --volume \"$PWD/gizmoplex-archive:/archive\" gizmoplex-downloader --out /archive --interactive",
     "dry-run": "tsx src/app.ts --dry-run",
     "show-in-progress-plan": "tsx src/app.ts --show-in-progress-plan",
     "start": "tsx src/app.ts -i",
