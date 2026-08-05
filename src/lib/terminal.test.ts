@@ -4,8 +4,9 @@ import { printDownloadPlan, printTransactions } from './terminal.js';
 describe('printDownloadPlan', () => {
   it('keeps dry-run output on stdout and includes the source', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    printDownloadPlan('Product', 'Episode', 'https://page', [{ extension: 'mp4', kind: 'video', label: '', path: '/tmp/x.mp4', sizeBytes: 12, skip: false, url: 'https://file' }], true);
-    expect(log).toHaveBeenCalledWith('    source: https://file');
+    printDownloadPlan('Product', 'Episode', 'https://page?token=page-secret', [{ extension: 'mp4', kind: 'video', label: '', path: '/tmp/x.mp4', sizeBytes: 12, skip: false, url: 'https://file?X-Amz-Signature=file-secret' }], true);
+    expect(log).toHaveBeenCalledWith('    source: https://file/');
+    expect(log.mock.calls.flat().join('\n')).not.toContain('secret');
     log.mockRestore();
   });
 

@@ -2,7 +2,7 @@ import { checkbox, confirm, select } from '@inquirer/prompts';
 import { mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { extractVideoUrls, extractZipDownloadLinks, zipFilename } from './links.js';
-import { sanitizePathComponent } from './format.js';
+import { redactUrl, sanitizePathComponent } from './format.js';
 import { checkboxIndicator, displayDownloadableItem, displayDownloadableItemDescription, pageSize, printSelectedItemsByTransaction, replaceStderrLine, selectedItemCount, selectedTransactionCount } from './selection-ui.js';
 import type { HttpClient } from './http-client.js';
 import type { MetadataCache } from './metadata-cache.js';
@@ -29,7 +29,7 @@ export async function fetchInteractiveTransactions(client: Pick<HttpClient, 'get
 
 export async function selectTransaction(transactions: InteractiveTransaction[], selectedItems: Map<string, SelectedInteractiveItem>, prompts: InteractivePrompts = defaultPrompts): Promise<TransactionMenuSelection> {
   if (transactions.length === 0) throw new Error('No transactions found.');
-  return prompts.select({ message: 'Select a transaction', pageSize: pageSize(), choices: [...transactions.map((item) => ({ name: `${item.transaction.date}  ${item.transaction.description} (selected: ${selectedItemCount(selectedItems, item.transaction)}, downloaded: ${item.alreadyDownloadedCount}/${item.items.length})`, value: { kind: 'transaction' as const, transaction: item }, description: item.transaction.url })), ...(selectedItems.size > 0 ? [{ name: `Review and download selected items (${selectedItems.size})`, value: { kind: 'confirm' as const }, description: `${selectedItems.size} item(s) selected` }] : [])] }, { output: process.stderr });
+  return prompts.select({ message: 'Select a transaction', pageSize: pageSize(), choices: [...transactions.map((item) => ({ name: `${item.transaction.date}  ${item.transaction.description} (selected: ${selectedItemCount(selectedItems, item.transaction)}, downloaded: ${item.alreadyDownloadedCount}/${item.items.length})`, value: { kind: 'transaction' as const, transaction: item }, description: redactUrl(item.transaction.url) })), ...(selectedItems.size > 0 ? [{ name: `Review and download selected items (${selectedItems.size})`, value: { kind: 'confirm' as const }, description: `${selectedItems.size} item(s) selected` }] : [])] }, { output: process.stderr });
 }
 
 export async function selectDownloadableItems(items: SelectedInteractiveItem[], selectedItems: Map<string, SelectedInteractiveItem>, hiddenDownloadedCount: number, prompts: InteractivePrompts = defaultPrompts): Promise<SelectedInteractiveItem[] | undefined> {

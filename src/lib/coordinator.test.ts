@@ -47,6 +47,17 @@ describe('archive coordinator', () => {
     log.mockRestore();
   });
 
+  it('redacts URLs when displaying a saved plan', async () => {
+    const root = '/tmp/gizmo-coordinator-redacted-plan';
+    await mkdir(root, { recursive: true });
+    await writeFile(`${root}/.in-progress`, JSON.stringify({ version: 1, planned: [{ transactionDescription: 'Product', videoTitle: 'Episode', videoUrl: 'https://page/video?token=page-secret', downloads: [{ extension: 'mp4', kind: 'video', label: '', path: '/tmp/video.mp4', skip: false, url: 'https://cdn/video.mp4?X-Amz-Signature=file-secret' }] }], savedAt: 'now' }), 'utf8');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await runApplication({ out: root, dryRun: false, clearCache: false, interactive: false, showInProgressPlan: true, srt: false, vtt: false, yes: false, timeout: 1000 } as any);
+    expect(log.mock.calls.flat().join('\n')).toContain('https://cdn/video.mp4');
+    expect(log.mock.calls.flat().join('\n')).not.toContain('secret');
+    log.mockRestore();
+  });
+
   it('reports a missing saved plan before starting the application', async () => {
     await expect(runApplication({ out: '/tmp/gizmo-coordinator-missing-plan', dryRun: false, clearCache: false, interactive: false, showInProgressPlan: true, srt: false, vtt: false, yes: false, timeout: 1000 } as any)).rejects.toThrow('No saved .in-progress plan found');
   });

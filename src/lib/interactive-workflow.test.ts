@@ -72,10 +72,16 @@ describe('interactive archive workflow', () => {
     expect(execute).toHaveBeenCalled();
     expect(execute.mock.calls[0][0][0]).toMatchObject({ videoTitle: 'https://zip' });
 
-    const video = { id: 'video:missing', kind: 'video' as const, url: 'https://missing-video' };
+    const video = { id: 'video:missing', kind: 'video' as const, url: 'https://missing-video?token=missing-secret' };
     vi.mocked(fetchInteractiveTransactions).mockResolvedValueOnce([{ alreadyDownloadedCount: 0, items: [video], transaction }]);
     vi.mocked(selectTransaction).mockResolvedValueOnce({ kind: 'transaction', transaction: { alreadyDownloadedCount: 0, items: [video], transaction } }).mockResolvedValueOnce({ kind: 'confirm' });
     vi.mocked(selectItemsForTransaction).mockImplementationOnce(async (_client, _cache, _transaction, selected) => { selected.set(video.id, { item: video, transaction }); });
-    await expect(processInteractiveArchive({ contentLength: async () => undefined } as any, [transaction], { out: '/tmp/gizmo-interactive', dryRun: false, clearCache: false, interactive: true, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any, undefined, vi.fn())).rejects.toThrow('Missing fetched metadata');
+    try {
+      await processInteractiveArchive({ contentLength: async () => undefined } as any, [transaction], { out: '/tmp/gizmo-interactive', dryRun: false, clearCache: false, interactive: true, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any, undefined, vi.fn());
+      throw new Error('expected missing metadata to fail');
+    } catch (error) {
+      expect(String(error)).toContain('Missing fetched metadata');
+      expect(String(error)).not.toContain('missing-secret');
+    }
   });
 });

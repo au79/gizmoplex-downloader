@@ -9,7 +9,7 @@ import { inProgressPath } from './in-progress.js';
 import { printDownloadPlan } from './terminal.js';
 import { printDownloadSummary } from './summary.js';
 import { errorMessage } from './runtime.js';
-import { sanitizePathComponent } from './format.js';
+import { redactUrl, sanitizePathComponent } from './format.js';
 import type { HttpClient } from './http-client.js';
 import type { Options, PlannedVideoDownload, Transaction, SelectedInteractiveItem } from '../types.js';
 
@@ -36,7 +36,7 @@ export async function processInteractiveArchive(
   }
   const planned = await Promise.all([...selectedItems.values()].map(async (selected): Promise<PlannedVideoDownload> => {
     if (selected.item.kind === 'zip') return { downloads: await planZipDownload(client, selected.transaction, selected.item.link, outputRoot, ensureDirectory, fileSize), transactionDescription: selected.transaction.description, videoTitle: selected.item.link.label || selected.item.link.url, videoUrl: selected.item.link.url };
-    if (!selected.page) throw new Error(`Missing fetched metadata for ${selected.item.url}.`);
+    if (!selected.page) throw new Error(`Missing fetched metadata for ${redactUrl(selected.item.url)}.`);
     return { downloads: await planVideoDownloads(client, selected.transaction, selected.page, selected.page.title, outputRoot, options, ensureDirectory, fileSize, selected.page.vhxVideo, selected.page.vimeoConfig), transactionDescription: selected.transaction.description, videoTitle: selected.page.title, videoUrl: selected.page.url };
   }));
   const resolvedPlan = await resolvePlannedDownloadPaths(planned, fileSize);

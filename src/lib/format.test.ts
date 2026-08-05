@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatDuration, normalizeText, redactUrl, sanitizePathComponent } from './format.ts';
+import { formatBytes, formatDuration, normalizeText, redactUrl, redactUrlsInText, sanitizePathComponent } from './format.ts';
 
 describe('format helpers', () => {
   describe('text and paths', () => {
@@ -25,9 +25,10 @@ describe('format helpers', () => {
   });
 
   describe('URLs', () => {
-    it('redacts supported query credentials only', () => {
-      expect(redactUrl('https://example.test/file?token=secret&name=keep')).toBe('https://example.test/file?token=%5Bredacted%5D&name=keep');
+    it('removes signed query data, fragments, and URL credentials', () => {
+      expect(redactUrl('https://user:password@example.test/file?X-Amz-Signature=secret&name=keep#fragment')).toBe('https://example.test/file');
       expect(redactUrl('not a url')).toBe('not a url');
+      expect(redactUrlsInText('Download https://cdn.test/file?token=secret now')).toBe('Download https://cdn.test/file now');
     });
   });
 });

@@ -53,17 +53,19 @@ export function formatDuration(milliseconds: number): string {
 export function redactUrl(value: string): string {
   try {
     const url = new URL(value);
-
-    for (const key of ['auth-user-token', 'token']) {
-      if (url.searchParams.has(key)) {
-        url.searchParams.set(key, '[redacted]');
-      }
-    }
-
+    if (!url.username && !url.password && !url.search && !url.hash) return value;
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
     return url.toString();
   } catch {
     return value;
   }
+}
+
+export function redactUrlsInText(value: string): string {
+  return value.replace(/https?:\/\/[^\s<>"']+/gi, (url) => redactUrl(url));
 }
 
 function padDurationValue(value: number): string {

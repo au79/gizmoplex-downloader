@@ -5,7 +5,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { assertDownloadedSize } from './download-verification.js';
 import { formatRetryDelay, isRetryableFetchError, isRetryableStatus, sleep, errorMessage } from './runtime.js';
-import { redactUrl } from './format.js';
+import { redactUrl, redactUrlsInText } from './format.js';
 import { createDownloadProgressBar, finishProgressBar, parseContentLength, progressTickLength, progressTokens } from './download-execution.js';
 import type { HttpResponse } from '../types.js';
 
@@ -60,13 +60,14 @@ export class FetchHttpClient implements HttpClient {
   }
 
   async downloadToFile(url: string, filePath: string, resourceDescription = url): Promise<void> {
-    const response = await this.fetchRaw(url, { method: 'GET', headers: { accept: '*/*' } }, 0, false, `download ${resourceDescription} to ${filePath}`, true);
-    if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText} for ${url}`);
-    if (!response.body) throw new Error(`Download failed: response body was empty for ${url}`);
+    const safeResourceDescription = redactUrlsInText(resourceDescription);
+    const response = await this.fetchRaw(url, { method: 'GET', headers: { accept: '*/*' } }, 0, false, `download ${safeResourceDescription} to ${filePath}`, true);
+    if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText} for ${redactUrl(url)}`);
+    if (!response.body) throw new Error(`Download failed: response body was empty for ${redactUrl(url)}`);
 
     const tempPath = `${filePath}.part`;
     const totalBytes = parseContentLength(response.headers);
-    const progress = createDownloadProgressBar(resourceDescription, totalBytes);
+    const progress = createDownloadProgressBar(safeResourceDescription, totalBytes);
     let downloadedBytes = 0;
     const startedAt = Date.now();
     const progressStream = new Transform({
@@ -79,7 +80,7 @@ export class FetchHttpClient implements HttpClient {
 
     try {
       await pipeline(Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]), progressStream, createWriteStream(tempPath));
-      assertDownloadedSize(resourceDescription, totalBytes, downloadedBytes);
+      assertDownloadedSize(safeResourceDescription, totalBytes, downloadedBytes);
       finishProgressBar(progress, downloadedBytes, totalBytes, startedAt);
       await rename(tempPath, filePath);
     } catch (error) {
@@ -95,7 +96,8 @@ export class FetchHttpClient implements HttpClient {
   }
 
   private async fetchRaw(url: string, init: RequestInit, redirectCount = 0, useTimeout = true, resourceDescription = url, returnHttpErrors = false): Promise<Response> {
-    if (redirectCount > 10) throw new Error(`Too many redirects while fetching ${resourceDescription} (${redactUrl(url)}).`);
+    const safeResourceDescription = redactUrlsInText(resourceDescription);
+    if (redirectCount > 10) throw new Error(`Too many redirects while fetching ${safeResourceDescription} (${redactUrl(url)}).`);
     let retryDelayMs = INITIAL_RETRY_DELAY_MS;
     let lastError: unknown;
 
@@ -110,27 +112,27 @@ export class FetchHttpClient implements HttpClient {
         this.storeCookies(response.headers);
         if (response.status >= 300 && response.status < 400) {
           const location = response.headers.get('location');
-          if (!location) throw new Error(`Redirect from ${redactUrl(url)} did not include a location while fetching ${resourceDescription}.`);
+          if (!location) throw new Error(`Redirect from ${redactUrl(url)} did not include a location while fetching ${safeResourceDescription}.`);
           const nextUrl = new URL(location, url).toString();
           return this.fetchRaw(nextUrl, response.status === 307 || response.status === 308 ? init : { method: 'GET' }, redirectCount + 1, useTimeout, resourceDescription, returnHttpErrors);
         }
         if (response.ok || response.status === 401) return response;
         if (!isRetryableStatus(response.status)) {
           if (returnHttpErrors) return response;
-          throw new Error(`Request failed: ${response.status} ${response.statusText} while fetching ${resourceDescription} (${redactUrl(url)}).`);
+          throw new Error(`Request failed: ${response.status} ${response.statusText} while fetching ${safeResourceDescription} (${redactUrl(url)}).`);
         }
         lastError = new Error(`Request failed: ${response.status} ${response.statusText}`);
       } catch (error) {
         lastError = error;
-        if (!isRetryableFetchError(error)) throw new Error(`Request failed while fetching ${resourceDescription} (${redactUrl(url)}): ${errorMessage(error)}`);
+        if (!isRetryableFetchError(error)) throw new Error(`Request failed while fetching ${safeResourceDescription} (${redactUrl(url)}): ${redactUrlsInText(errorMessage(error))}`);
       }
       if (attempt < MAX_FETCH_ATTEMPTS) {
-        console.error(`Fetch attempt ${attempt}/${MAX_FETCH_ATTEMPTS} failed for ${resourceDescription} (${redactUrl(url)}): ${errorMessage(lastError)}. Retrying in ${formatRetryDelay(retryDelayMs)}...`);
+        console.error(`Fetch attempt ${attempt}/${MAX_FETCH_ATTEMPTS} failed for ${safeResourceDescription} (${redactUrl(url)}): ${redactUrlsInText(errorMessage(lastError))}. Retrying in ${formatRetryDelay(retryDelayMs)}...`);
         await sleep(retryDelayMs);
         retryDelayMs *= 2;
       }
     }
-    throw new Error(`Request failed after ${MAX_FETCH_ATTEMPTS} attempts while fetching ${resourceDescription} (${redactUrl(url)}): ${errorMessage(lastError)}`);
+    throw new Error(`Request failed after ${MAX_FETCH_ATTEMPTS} attempts while fetching ${safeResourceDescription} (${redactUrl(url)}): ${redactUrlsInText(errorMessage(lastError))}`);
   }
 
   private cookieHeader(): string { return [...this.cookies.entries()].map(([name, value]) => `${name}=${value}`).join('; '); }

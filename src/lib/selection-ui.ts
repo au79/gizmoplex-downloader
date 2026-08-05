@@ -1,10 +1,10 @@
 import { styleText } from 'node:util';
-import { normalizeText } from './format.js';
+import { normalizeText, redactUrl } from './format.js';
 import { zipFilename } from './links.js';
 import type { SelectedInteractiveItem, Transaction } from '../types.js';
 
 export function displayDownloadableItem(item: SelectedInteractiveItem): string { return item.item.kind === 'video' ? normalizeText(item.page?.title ?? '') || item.transaction.description : `ZIP: ${zipFilename(item.item.link)}`; }
-export function displayDownloadableItemDescription(item: SelectedInteractiveItem): string { return item.item.kind === 'video' ? item.item.url : `Signed album download: ${zipFilename(item.item.link)}`; }
+export function displayDownloadableItemDescription(item: SelectedInteractiveItem): string { return item.item.kind === 'video' ? redactUrl(item.item.url) : `Signed album download: ${zipFilename(item.item.link)}`; }
 export function checkboxIndicator(selected: boolean): string { return selected ? styleText('green', '●') : '○'; }
 export function selectedItemCount(selectedItems: Map<string, SelectedInteractiveItem>, transaction: Transaction): number { return [...selectedItems.values()].filter((selected) => selected.transaction.url === transaction.url).length; }
 export function selectedTransactionCount(selectedItems: Map<string, SelectedInteractiveItem>): number { return new Set([...selectedItems.values()].map((selected) => selected.transaction.url)).size; }

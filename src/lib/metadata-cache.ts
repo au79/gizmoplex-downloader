@@ -3,6 +3,7 @@ import path from 'node:path';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { extractDownloadLinks } from './links.js';
 import { errorMessage, isNodeError } from './runtime.js';
+import { redactUrl } from './format.js';
 import type { CachedVideoMetadata, LegacyCachedVideoMetadata, PageTitleCandidates } from '../types.js';
 
 export class MetadataCache {
@@ -21,7 +22,7 @@ export class MetadataCache {
       return migrated;
     } catch (error) {
       if (isNodeError(error) && error.code === 'ENOENT') return undefined;
-      throw new Error(`Could not read metadata cache for ${videoUrl}: ${errorMessage(error)}`);
+      throw new Error(`Could not read metadata cache for ${redactUrl(videoUrl)}: ${errorMessage(error)}`);
     }
   }
   async write(metadata: CachedVideoMetadata): Promise<void> {

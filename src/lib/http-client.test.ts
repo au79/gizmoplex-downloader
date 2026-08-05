@@ -135,7 +135,13 @@ describe('HTTP client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('wrong', { status: 200, headers: { 'content-length': '10' } })));
     await expect(client.downloadToFile('https://cdn.test/truncated', filePath)).rejects.toThrow('Download size mismatch');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('missing', { status: 404 })));
-    await expect(client.downloadToFile('https://cdn.test/missing', filePath)).rejects.toThrow('Download failed: 404');
+    try {
+      await client.downloadToFile('https://cdn.test/missing?X-Amz-Signature=file-secret', filePath);
+      throw new Error('expected download to fail');
+    } catch (error) {
+      expect(String(error)).toContain('Download failed: 404');
+      expect(String(error)).not.toContain('file-secret');
+    }
   });
 
   it('ignores malformed cookie pairs and reports login responses without site messages', async () => {

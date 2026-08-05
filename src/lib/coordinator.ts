@@ -16,7 +16,7 @@ import { printDownloadPlan, printTransactions } from './terminal.js';
 import { printDownloadSummary } from './summary.js';
 import { processInteractiveArchive } from './interactive-workflow.js';
 import { errorMessage, sleep } from './runtime.js';
-import { formatDuration, sanitizePathComponent } from './format.js';
+import { formatDuration, redactUrl, sanitizePathComponent } from './format.js';
 import { confirmSufficientDiskSpace } from './storage.js';
 
 export async function runApplication(options: Options): Promise<void> {
@@ -30,7 +30,7 @@ export async function runApplication(options: Options): Promise<void> {
       const planPath = inProgressPath(outputRoot, options.inProgressPlan);
       const plan = await readInProgressPlan(planPath);
       if (!plan) throw new Error(`No saved .in-progress plan found at ${planPath}.`);
-      console.log(JSON.stringify(plan, null, 2));
+      console.log(JSON.stringify(plan, (key, value) => key === 'url' || key === 'videoUrl' ? redactUrl(String(value)) : value, 2));
       return;
     }
     if (options.clearCache) await new MetadataCache(outputRoot, ensureDirectory, extractPageTitleCandidates).clear();
