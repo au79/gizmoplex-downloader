@@ -1,4 +1,4 @@
-FROM node:20.12-bookworm-slim AS build
+FROM node:26.5-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN pnpm run build && pnpm prune --prod
 
-FROM node:20.12-bookworm-slim
+FROM node:26.5-bookworm-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
