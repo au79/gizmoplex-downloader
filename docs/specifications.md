@@ -104,8 +104,16 @@ Non-interactive mode is the default when `--interactive` is not supplied.
 - For each transaction, it MUST inspect the product page for ZIP assets and
   video pages, then plan the selected video and subtitle files.
 - The CLI MUST display the complete plan and summary before transferring files.
-- The default non-interactive mode MUST require confirmation before transfer.
-  `--yes` MAY bypass that confirmation for unattended runs.
+- Before any download session begins, the CLI MUST compare available space on
+  the filesystem containing the target output directory with the sum of
+  unskipped planned downloads whose sizes are known.
+- If the known required size exceeds available space, the CLI MUST warn the
+  user and ask for confirmation before continuing. If any planned download
+  size is unknown, the CLI MUST continue without claiming that sufficient
+  space has been verified.
+- The default non-interactive mode MUST require confirmation before transfer
+  and when known required space is insufficient. In non-interactive mode,
+  `--yes` MUST bypass both confirmations for unattended runs.
 - In a dry run, it MUST perform the same discovery and planning but MUST report
   `would download` or `skip` instead of transferring media.
 - When a delay is configured, the CLI MUST wait only between downloadable items

@@ -47,7 +47,11 @@ pnpm exec tsx src/app.ts
 ```
 
 This non-interactive mode shows the complete plan and asks for confirmation
-before transferring files. Use `--yes` only for an unattended run.
+before transferring files. Before a download session starts, the CLI also
+checks available space on the target device and asks whether to continue when
+the known planned download size exceeds it. Use `--yes` only for an unattended
+non-interactive run; it bypasses the transfer and insufficient-space
+confirmations.
 
 Preview what would be downloaded, including file sizes and items that already
 exist locally:
@@ -106,7 +110,7 @@ Useful options:
   and transfer time.
 - `--show-in-progress-plan` — display a saved interrupted download plan without
   logging in.
-- `-y, --yes` — bypass the confirmation prompt in non-interactive mode.
+- `-y, --yes` — bypass non-interactive download and insufficient-space confirmations.
 
 Run `pnpm exec tsx src/app.ts --help` for the full option list.
 

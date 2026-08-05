@@ -17,6 +17,7 @@ import { printDownloadSummary } from './summary.js';
 import { processInteractiveArchive } from './interactive-workflow.js';
 import { errorMessage, sleep } from './runtime.js';
 import { formatDuration, sanitizePathComponent } from './format.js';
+import { confirmSufficientDiskSpace } from './storage.js';
 
 export async function runApplication(options: Options): Promise<void> {
   const outputRoot = path.resolve(options.out);
@@ -44,7 +45,7 @@ export async function runApplication(options: Options): Promise<void> {
     if (await offerSavedPlan(client, options, controller)) { await refreshedTransactions; return; }
     if (options.interactive) {
       const transactions = await refreshedTransactions;
-      await processInteractiveArchive(client, transactions, options, controller, (planned, planPath, delay) => executePlan(client, planned, planPath, delay, false, controller));
+      await processInteractiveArchive(client, transactions, options, controller, (planned, planPath, delay) => executePlan(client, planned, planPath, delay, false, controller, outputRoot, options.yes));
     } else {
       const transactions = cachedTransactions ?? await refreshedTransactions;
       if (!cachedTransactions) printTransactions(transactions);
@@ -90,7 +91,7 @@ async function offerSavedPlan(client: HttpClient, options: Options, controller: 
     console.error('');
     console.error('Download summary for saved .in-progress plan:');
     printDownloadSummary(summary, console.error);
-  }, (savedClient, planned, planPath, delay, deleteOnSuccess) => executePlan(savedClient, planned, planPath, delay, deleteOnSuccess, controller), async (count) => confirm({ message: `Use saved .in-progress plan with ${count} video(s)?`, default: true }, { output: process.stderr }));
+  }, (savedClient, planned, planPath, delay, deleteOnSuccess) => executePlan(savedClient, planned, planPath, delay, deleteOnSuccess, controller, path.resolve(options.out), options.yes), async (count) => confirm({ message: `Use saved .in-progress plan with ${count} video(s)?`, default: true }, { output: process.stderr }));
 }
 
 export async function processArchive(client: HttpClient, transactions: Transaction[], options: Options, controller: ReturnType<typeof createResumeController>): Promise<void> {
@@ -124,10 +125,11 @@ export async function processArchive(client: HttpClient, transactions: Transacti
   console.error('Download summary:');
   printDownloadSummary(summary, console.error);
   if (!options.yes && !await confirm({ message: 'Download planned files now?', default: false }, { output: process.stderr })) { console.error('Download cancelled.'); return; }
-  await executePlan(client, resolvedPlan, inProgressPath(outputRoot, options.inProgressPlan), options.delay, false, controller);
+  await executePlan(client, resolvedPlan, inProgressPath(outputRoot, options.inProgressPlan), options.delay, false, controller, outputRoot, options.yes);
 }
 
-async function executePlan(client: HttpClient, planned: PlannedVideoDownload[], planPath: string, delay: Options['delay'], deleteOnSuccess: boolean, controller: ReturnType<typeof createResumeController>): Promise<void> {
+export async function executePlan(client: HttpClient, planned: PlannedVideoDownload[], planPath: string, delay: Options['delay'], deleteOnSuccess: boolean, controller: ReturnType<typeof createResumeController>, outputRoot: string, yes: boolean): Promise<void> {
+  if (!await confirmSufficientDiskSpace(outputRoot, planned, yes)) { console.error('Download cancelled.'); return; }
   await downloadPlannedVideos(client, planned, planPath, delay, deleteOnSuccess, {
     ensureDirectory,
     fileSize,

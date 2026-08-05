@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+const storage = vi.hoisted(() => ({ confirmSufficientDiskSpace: vi.fn().mockResolvedValue(true) }));
 vi.mock('@inquirer/prompts', () => ({ checkbox: vi.fn(), confirm: vi.fn().mockResolvedValue(false), select: vi.fn() }));
-import { countDownloadedItems, createInterruptHandler, ensureDirectory, fileSize, processArchive, runApplication } from './coordinator.js';
+vi.mock('./storage.js', () => storage);
+import { countDownloadedItems, createInterruptHandler, ensureDirectory, executePlan, fileSize, processArchive, runApplication } from './coordinator.js';
 import { createResumeController } from './in-progress.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { extractVideoUrls } from './links.js';
@@ -95,6 +97,23 @@ describe('archive coordinator', () => {
     await processArchive({ get: async () => ({ body: '<a href="one.zip">One</a>', status: 200, url: 'https://product' }), contentLength: async () => undefined, downloadToFile } as any, [{ date: '', description: 'Product', url: 'https://product' }], { out: '/tmp/gizmo-coordinator', dryRun: false, clearCache: false, interactive: false, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any, createResumeController());
     expect(downloadToFile).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith('Download cancelled.');
+    error.mockRestore();
+  });
+
+  it('checks available space before executing a plan', async () => {
+    const downloadToFile = vi.fn();
+    await executePlan({ downloadToFile }, [], '/tmp/gizmo-coordinator-space/.in-progress', undefined, false, createResumeController(), '/tmp/gizmo-coordinator-space', false);
+    expect(storage.confirmSufficientDiskSpace).toHaveBeenCalledWith('/tmp/gizmo-coordinator-space', [], false);
+    expect(downloadToFile).not.toHaveBeenCalled();
+  });
+
+  it('cancels execution when the space confirmation is declined', async () => {
+    storage.confirmSufficientDiskSpace.mockResolvedValueOnce(false);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const downloadToFile = vi.fn();
+    await executePlan({ downloadToFile }, [], '/tmp/gizmo-coordinator-space/.in-progress', undefined, false, createResumeController(), '/tmp/gizmo-coordinator-space', false);
+    expect(error).toHaveBeenCalledWith('Download cancelled.');
+    expect(downloadToFile).not.toHaveBeenCalled();
     error.mockRestore();
   });
 });
