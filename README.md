@@ -129,6 +129,12 @@ The project was developed with [OpenAI Codex](https://openai.com/codex/). See
 [AGENTS.md](AGENTS.md) for contributor guidance and
 [docs/specifications.md](docs/specifications.md) for supported behavior.
 
+For public contribution, security, and conduct guidance, see
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Review the
+[public repository scope](docs/public-repository-scope.md) before adding
+fixtures, logs, or downloaded data.
+
 ## License
 
 The source code is licensed under the [MIT License](LICENSE).

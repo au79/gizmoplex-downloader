@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible problem with the downloader.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, signed URLs, account data, downloaded content, cache files, plans, or logs.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Which release or commit shows the problem?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Describe the steps using synthetic data and redacted output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Node.js version, pnpm version, and relevant flags. Do not include credentials or private paths.
+    validations:
+      required: true
