@@ -21,7 +21,8 @@ Release workflow; it does not change the planned 1.0.0 release milestone.
 5. Push the tag; GitHub Actions builds the standalone binaries, creates
    `SHA256SUMS`, publishes the assets to the matching GitHub Release, and
    publishes versioned Docker images to Docker Hub.
-6. Verify the release notes, assets, checksums, and Docker image tags.
+6. Verify the release notes, assets, checksums, Docker image tags, image
+   vulnerability scan, and container smoke test.
 
 Use `-alpha.N`, `-beta.N`, or `-rc.N` for pre-releases. Do not reuse or move
 published tags; issue a corrective patch release instead.
