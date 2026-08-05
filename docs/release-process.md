@@ -8,9 +8,9 @@ any published container image.
 - `MINOR`: backward-compatible features or options.
 - `PATCH`: backward-compatible fixes and security updates.
 
-The first real public release is **`1.0.0`**. The package is currently
-versioned for that intended release, but it is not public until the release
-checklist passes and `v1.0.0` is tagged.
+The first real public release remains **`1.0.0`**. Version `0.9.0` is a
+pre-1.0.0 validation release for exercising the standalone binary and GitHub
+Release workflow; it does not change the planned 1.0.0 release milestone.
 
 ## Release steps
 
