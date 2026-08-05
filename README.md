@@ -135,6 +135,9 @@ For public contribution, security, and conduct guidance, see
 [public repository scope](docs/public-repository-scope.md) before adding
 fixtures, logs, or downloaded data.
 
+Maintainer responsibilities and repository settings are documented in the
+[maintainer governance guide](docs/maintainer-governance.md).
+
 ## License
 
 The source code is licensed under the [MIT License](LICENSE).
