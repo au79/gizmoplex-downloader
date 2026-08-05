@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdir } from 'node:fs/promises';
 
 const mocks = vi.hoisted(() => ({
   controller: { saveSync: vi.fn(), setActive: vi.fn() },
@@ -53,6 +54,7 @@ describe('application orchestration', () => {
   });
 
   it('constructs dependencies, clears cache, and selects interactive mode', async () => {
+    await mkdir('/tmp/gizmo-app', { recursive: true });
     mocks.processInteractive.mockImplementationOnce(async (...args: any[]) => { await args[4]([], '/tmp/gizmo-app/.in-progress', undefined); });
     await runApplication({ out: '/tmp/gizmo-app', dryRun: false, clearCache: true, interactive: true, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any);
     expect(mocks.clear).toHaveBeenCalled();
