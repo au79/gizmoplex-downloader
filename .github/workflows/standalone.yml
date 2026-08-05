@@ -56,7 +56,7 @@ jobs:
           "$binary" --help
 
       - name: Upload standalone binary
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: standalone-${{ matrix.target }}
           path: dist/standalone/
