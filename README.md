@@ -138,6 +138,9 @@ fixtures, logs, or downloaded data.
 Maintainer responsibilities and repository settings are documented in the
 [maintainer governance guide](docs/maintainer-governance.md).
 
+Release history and the manual release procedure are documented in
+[CHANGELOG.md](CHANGELOG.md) and [docs/release-process.md](docs/release-process.md).
+
 ## License
 
 The source code is licensed under the [MIT License](LICENSE).

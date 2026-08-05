@@ -4,6 +4,9 @@ Use this checklist before publishing the repository or creating a public
 release. Keep credentials, downloaded media, caches, plans, and logs out of
 the checklist evidence itself.
 
+Follow [the release process](release-process.md) for versioning, tagging,
+release notes, rollback, and support policy.
+
 ## Publication gate
 
 - [x] Confirm the public boundary in
