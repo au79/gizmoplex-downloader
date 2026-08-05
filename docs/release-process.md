@@ -18,7 +18,9 @@ checklist passes and `v1.0.0` is tagged.
 2. Run [the release checklist](release-checklist.md).
 3. Commit the release changes on a clean, green `main` checkout.
 4. Create an annotated tag such as `v1.0.0`.
-5. Create the matching GitHub release and verify its notes and artifacts.
+5. Push the tag; GitHub Actions builds the standalone binaries, creates
+   `SHA256SUMS`, and publishes the assets to the matching GitHub Release.
+6. Verify the release notes, assets, and checksums.
 
 Use `-alpha.N`, `-beta.N`, or `-rc.N` for pre-releases. Do not reuse or move
 published tags; issue a corrective patch release instead.

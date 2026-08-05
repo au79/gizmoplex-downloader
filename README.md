@@ -32,6 +32,13 @@ GIZMOPLEX_PASSWORD=your-password
 
 `GIZMOPLEX_USERNAME` may be used instead of `GIZMOPLEX_EMAIL`.
 
+### Standalone binaries
+
+Version tags publish standalone binaries for Linux x64, Windows x64, and
+macOS arm64 to the matching GitHub Release. Each release includes a
+`SHA256SUMS` file for verifying downloaded binaries. The binaries include a
+Node.js runtime and do not require a separate Node.js or pnpm installation.
+
 ## Usage
 
 Start the interactive picker:
