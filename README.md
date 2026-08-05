@@ -127,5 +127,8 @@ The project was developed with [OpenAI Codex](https://openai.com/codex/). See
 
 ## License
 
-No license has been granted for this repository yet. Do not redistribute or
-reuse the code unless the repository owner adds a license.
+The source code is licensed under the [MIT License](LICENSE).
+
+This license applies to this repository's code and documentation only. It does
+not grant rights to Gizmoplex content, trademarks, or upstream services. Use
+the tool only with an account and content you are authorized to access.

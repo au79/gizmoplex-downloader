@@ -8,7 +8,7 @@ authorized to download from their own Gizmoplex account.
 ## Working conventions
 
 - Use `pnpm`; do not use npm or yarn.
-- Run the CLI locally with `pnpm exec tsx src/index.ts`.
+- Run the CLI locally with `pnpm exec tsx src/app.ts`.
 - Keep credentials out of source control. The CLI prompts when values are not
   supplied through `.env` (`GIZMOPLEX_EMAIL` or `GIZMOPLEX_USERNAME`, plus
   `GIZMOPLEX_PASSWORD`).
@@ -26,7 +26,7 @@ Run:
 ```sh
 pnpm test
 pnpm run build
-pnpm exec tsx src/index.ts --help
+pnpm exec tsx src/app.ts --help
 ```
 
 Keep commits small and use Conventional Commit subjects, for example
