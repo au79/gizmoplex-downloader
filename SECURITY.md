@@ -50,3 +50,16 @@ own account. It does not provide access-control bypasses or grant rights to
 Gizmoplex content, trademarks, or upstream services. Gizmoplex and its
 delivery providers may change or become unavailable; an upstream failure is
 not automatically a project vulnerability.
+
+## Dependency and supply-chain triage
+
+Dependency-review pull requests and automated dependency updates are expected
+to run through the repository's security workflows. A high- or critical-
+severity dependency finding blocks a release until the dependency is upgraded,
+the affected path is removed, or a maintainer records a time-bounded risk
+acceptance with rationale and mitigation.
+
+Secret-scanning, push-protection, and code-scanning settings must be enabled in
+the repository's GitHub security settings. CI artifacts and logs should contain
+only test or analysis output and must never include credentials, signed URLs,
+downloaded content, caches, plans, or account data.
