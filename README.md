@@ -82,7 +82,9 @@ docker pull au79/gizmoplex-downloader:0.9.2
 ```
 
 The image publishes exact immutable version tags only. A moving `latest` tag
-is intentionally deferred until the first stable `1.0.0` release.
+is intentionally deferred until the first stable `1.0.0` release. Release
+workflow summaries include the image digest, and builds publish SBOM and
+provenance attestations when supported by Docker Hub.
 
 To enable publishing, create the public `au79/gizmoplex-downloader` repository
 on Docker Hub and add these repository secrets under GitHub **Settings →
