@@ -1,8 +1,17 @@
+# Build and test output
 /dist
 /coverage
-/gizmoplex-archive
 /out-tsc
 /tmp
+
+# Downloaded user data and runtime state
+/gizmoplex-archive
+**/.cache/
+**/.in-progress
+*.mp4
+*.srt
+*.vtt
+*.zip
 
 /node_modules
 /.pnpm-store
@@ -14,4 +23,10 @@ yarn-error.log*
 
 .vscode/*
 
+# Local credentials and environment variants
 .env
+.env.*
+!.env.example
+
+# Runtime logs
+*.log
