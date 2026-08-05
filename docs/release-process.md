@@ -19,12 +19,13 @@ Release workflow; it does not change the planned 1.0.0 release milestone.
 3. Commit the release changes on a clean, green `main` checkout.
 4. Create an annotated tag such as `v1.0.0`.
 5. Push the tag; GitHub Actions builds the standalone binaries, creates
-   `SHA256SUMS`, and publishes the assets to the matching GitHub Release.
-6. Verify the release notes, assets, and checksums.
+   `SHA256SUMS`, publishes the assets to the matching GitHub Release, and
+   publishes versioned Docker images to Docker Hub.
+6. Verify the release notes, assets, checksums, and Docker image tags.
 
 Use `-alpha.N`, `-beta.N`, or `-rc.N` for pre-releases. Do not reuse or move
 published tags; issue a corrective patch release instead.
 
 The sole maintainer supports the latest release on a best-effort basis. npm
-and Docker publication are not enabled until those distribution decisions are
-made separately.
+publication is not enabled. Docker publication uses versioned tags only; a
+moving `latest` tag remains deferred.
