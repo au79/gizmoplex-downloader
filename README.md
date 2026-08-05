@@ -78,11 +78,11 @@ pnpm exec tsx src/app.ts --out ./archive --srt --vtt
 Version tags also publish versioned images to Docker Hub:
 
 ```sh
-docker pull au79/gizmoplex-downloader:0.9.1
+docker pull au79/gizmoplex-downloader:0.9.2
 ```
 
-The image currently publishes immutable version tags only; a moving `latest`
-tag is intentionally deferred.
+The image publishes exact immutable version tags only. A moving `latest` tag
+is intentionally deferred until the first stable `1.0.0` release.
 
 To enable publishing, create the public `au79/gizmoplex-downloader` repository
 on Docker Hub and add these repository secrets under GitHub **Settings →

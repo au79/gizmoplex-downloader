@@ -27,5 +27,9 @@ Use `-alpha.N`, `-beta.N`, or `-rc.N` for pre-releases. Do not reuse or move
 published tags; issue a corrective patch release instead.
 
 The sole maintainer supports the latest release on a best-effort basis. npm
-publication is not enabled. Docker publication uses versioned tags only; a
-moving `latest` tag remains deferred.
+publication is not enabled. Docker publication uses exact immutable version
+tags only; a moving `latest` channel remains deferred until `1.0.0`. Docker
+base-image updates are handled through Dependabot or an intentional release
+update followed by the normal build and smoke checks. Published images are
+retained; rollback means selecting a prior exact version tag rather than
+moving a published tag.
