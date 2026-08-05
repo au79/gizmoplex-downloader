@@ -19,6 +19,7 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
+    "build:standalone": "node scripts/build-sea.mjs",
     "docker:build": "docker build -t gizmoplex-downloader .",
     "docker:run": "docker run --rm -it --env-file .env --volume \"$PWD/gizmoplex-archive:/archive\" gizmoplex-downloader --out /archive --interactive",
     "dry-run": "tsx src/app.ts --dry-run",
@@ -38,6 +39,8 @@
     "@types/node": "^25.6.2",
     "@types/progress": "^2.0.7",
     "@vitest/coverage-v8": "^4.1.10",
+    "esbuild": "^0.28.1",
+    "postject": "1.0.0-alpha.6",
     "tsx": "^4.21.0",
     "typescript": "6.0.3",
     "vitest": "^4.1.10"
