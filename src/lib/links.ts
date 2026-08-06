@@ -161,7 +161,9 @@ export function parseSubtitleFormat(value: string): SubtitleFormat | undefined {
 }
 
 function isLikelyVideoPage(url: URL): boolean {
-  return url.hostname.endsWith('gizmoplex.com') && (
+  const isGizmoplexHost = url.hostname === 'gizmoplex.com' || url.hostname.endsWith('.gizmoplex.com');
+
+  return isGizmoplexHost && (
     url.pathname.startsWith('/videos/') ||
     /\/packages\/[^/]+\/videos\/[^/]+/.test(url.pathname) ||
     url.pathname.startsWith('/watch/') ||
