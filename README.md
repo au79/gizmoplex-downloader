@@ -46,6 +46,9 @@ macOS arm64 to the matching GitHub Release. Each release includes a
 `SHA256SUMS` file for verifying downloaded binaries. The binaries include a
 Node.js runtime and do not require a separate Node.js or pnpm installation.
 
+For a step-by-step guide covering download, verification, credentials, and
+first use on each platform, see the [standalone binary guide](docs/standalone-binaries.md).
+
 ## Usage
 
 Start the interactive picker:
