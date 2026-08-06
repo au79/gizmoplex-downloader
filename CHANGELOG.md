@@ -13,7 +13,12 @@ tagged.
 This pre-1.0.0 validation release exercises the standalone binary build and
 GitHub Release distribution workflow.
 
-## [1.0.0] - Not yet released
+## [1.0.0] - 2026-08-05
 
-This is the planned first real public release. Do not treat the current
-package version as evidence that this release has already been published.
+First stable public release.
+
+- Add preflight storage checks and confirmation before downloads begin.
+- Redact signed URL query parameters from user-facing output and saved plans.
+- Harden Gizmoplex hostname validation against lookalike domains.
+- Publish standalone binaries with SHA-256 checksums through GitHub Releases.
+- Publish immutable Docker image tags with SBOM and provenance attestations.
