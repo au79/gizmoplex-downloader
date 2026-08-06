@@ -2,10 +2,10 @@
 
 ## Supported versions
 
-Until the first stable public release, the default branch is the only
-supported development line. After a stable release, security fixes target the
-latest released version unless a release note states otherwise. Older versions
-may stop receiving fixes without notice.
+Until the first stable public release, the default branch is the only line the
+maintainer may choose to consider. After a stable release, the maintainer may
+choose to consider the latest released version. Older versions may stop
+receiving attention without notice. No version is promised support or fixes.
 
 ## Reporting a vulnerability
 
@@ -25,8 +25,8 @@ Include, when safe:
 - Reproduction steps using synthetic data only.
 - A suggested mitigation, if known.
 
-Please allow three business days for an acknowledgement and fourteen days for
-an initial triage update. These are targets, not guarantees.
+There is no promised acknowledgement, triage, remediation, disclosure, or
+response timeline. The maintainer may review a report at their discretion.
 
 ## Handling sensitive data
 
