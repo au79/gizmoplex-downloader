@@ -7,10 +7,8 @@ export default defineConfig({
       include: ['src/lib/**/*.ts'],
       provider: 'v8',
       thresholds: {
-        // Node 20/22/24 V8 reports different branch maps for existing
-        // coordinator control flow; CI's lowest observed branch coverage is
-        // 96.87%. New code remains fully covered by focused tests.
-        branches: 96.8,
+        // Keep a small margin below the current 99.82% Node 20/22 baseline.
+        branches: 99.8,
         functions: 100,
         lines: 100,
         statements: 100,
