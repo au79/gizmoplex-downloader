@@ -4,13 +4,14 @@ import { extensionForDownload, extractDownloadLinks, extractVideoUrls, extractZi
 describe('link discovery and selection', () => {
   describe('product pages', () => {
     it('finds unique Gizmoplex video pages only', () => {
-      const html = '<a>missing</a><a href="/videos/one">one</a><a href="/videos/one">duplicate</a><a href="/packages/p/videos/two">two</a><a href="/watch/three">three</a><a href="/movies/four">four</a><a href="/series/five">five</a><a href="https://other.test/videos/no">no</a>';
+      const html = '<a>missing</a><a href="/videos/one">one</a><a href="/videos/one">duplicate</a><a href="/packages/p/videos/two">two</a><a href="/watch/three">three</a><a href="/movies/four">four</a><a href="/series/five">five</a><a href="https://gizmoplex.com/videos/root">root</a><a href="https://other.test/videos/no">no</a><a href="https://evilgizmoplex.com/videos/fake">fake</a>';
       expect(extractVideoUrls(html, 'https://www.gizmoplex.com/packages/p')).toEqual([
         'https://www.gizmoplex.com/videos/one',
         'https://www.gizmoplex.com/packages/p/videos/two',
         'https://www.gizmoplex.com/watch/three',
         'https://www.gizmoplex.com/movies/four',
         'https://www.gizmoplex.com/series/five',
+        'https://gizmoplex.com/videos/root',
       ]);
     });
 

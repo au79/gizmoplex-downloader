@@ -24,7 +24,12 @@ release notes, rollback, and support policy.
   `Christopher D. Goldman` as rights holder.
 - [x] Confirm `package.json` contains the intended public author, MIT license,
   description, repository, issue tracker, homepage, and Node.js requirement.
-- [ ] Inspect the final release archive from a clean checkout.
+- [x] Confirm the repository is public, Issues are enabled for bug and security
+  intake, Discussions, Projects, and Wiki are disabled, and the sole
+  collaborator is the maintainer account.
+- [x] Inspect the final release archive from a clean checkout; the `HEAD`
+  archive contained 78 files plus 7 directory entries, excluded credentials and
+  user data, and passed frozen install, tests, build, and CLI help verification.
 
 ## Automated verification
 
@@ -33,6 +38,13 @@ release notes, rollback, and support policy.
 - [ ] Docker image build and runtime smoke test pass, if Docker distribution is
   enabled.
 - [ ] Dependency, secret, and static-analysis checks pass.
+- [x] Review `package.json` against the committed `pnpm-lock.yaml`; verify
+  dependency resolution and integrity metadata with
+  `pnpm install --frozen-lockfile`.
+- [x] License decision: no dedicated automated transitive-license checker is
+  required currently. Review dependency license metadata during each release;
+  revisit this decision if npm publication, a larger dependency set, or a
+  dependency with additional notice obligations is introduced.
 - [ ] No CI artifact, log, image layer, or release bundle contains credentials,
   signed URLs, downloaded media, caches, plans, or logs.
 
@@ -41,6 +53,7 @@ release notes, rollback, and support policy.
 - [ ] Version and release tag follow the documented versioning policy.
 - [ ] Release notes describe behavior changes, security fixes, breaking
   changes, and configuration changes.
-- [ ] Support and rollback procedures are available to maintainers.
-- [ ] The release channel (source, npm, Docker, or another distribution) is
-  explicitly enabled and has a verification owner.
+- [x] Support and rollback procedures are available to maintainers.
+- [x] The release channels (source, standalone binaries, and Docker) are
+  explicitly enabled and have a verification owner; npm publication is
+  disabled.

@@ -9,6 +9,13 @@ Use it only with an account and content you are authorized to access. Gizmoplex
 and its delivery APIs may change or become unavailable; this tool has no
 affiliation with Gizmoplex.
 
+> **Use at your own risk.** This project is provided “as is,” without promises,
+> warranties, support, updates, availability, security, correctness, or
+> compatibility. You are solely responsible for evaluating and using it
+> lawfully, protecting your credentials and data, and accepting any consequences
+> of its use. The maintainer assumes no responsibility for loss, damage, service
+> interruption, account action, or other consequences arising from use.
+
 ## Requirements
 
 - Node.js 20.12 or newer
