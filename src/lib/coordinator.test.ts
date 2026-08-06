@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 const storage = vi.hoisted(() => ({ confirmSufficientDiskSpace: vi.fn().mockResolvedValue(true) }));
+const credentials = vi.hoisted(() => ({ readEmail: vi.fn(), readPassword: vi.fn() }));
+const httpClient = vi.hoisted(() => ({ login: vi.fn() }));
+const transactionApi = vi.hoisted(() => ({ fetchTransactions: vi.fn() }));
 vi.mock('@inquirer/prompts', () => ({ checkbox: vi.fn(), confirm: vi.fn().mockResolvedValue(false), select: vi.fn() }));
 vi.mock('./storage.js', () => storage);
+vi.mock('../credentials.js', () => credentials);
+vi.mock('./http-client.js', () => httpClient);
+vi.mock('./transactions.js', () => transactionApi);
 import { countDownloadedItems, createInterruptHandler, ensureDirectory, executePlan, fileSize, processArchive, runApplication } from './coordinator.js';
 import { createResumeController } from './in-progress.js';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -30,6 +36,7 @@ describe('archive coordinator', () => {
     await mkdir('/tmp/gizmo-coordinator/Product', { recursive: true });
     await writeFile('/tmp/gizmo-coordinator/Product/episode.mp4', 'x');
     await writeFile('/tmp/gizmo-coordinator/Product/notes.txt', 'x');
+    expect(await fileSize('/tmp/gizmo-coordinator/Product/episode.mp4')).toBe(1);
     expect(await countDownloadedItems('/tmp/gizmo-coordinator', { date: '', description: 'Product', url: 'https://product' })).toBe(1);
     expect(await fileSize('/dev/null')).toBeUndefined();
     await expect(ensureDirectory('/dev/null/child')).rejects.toThrow('Could not create output directory');
@@ -45,6 +52,37 @@ describe('archive coordinator', () => {
     await runApplication({ out: root, dryRun: false, clearCache: false, interactive: false, showInProgressPlan: true, srt: false, vtt: false, yes: false, timeout: 1000 } as any);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('"version": 1'));
     log.mockRestore();
+  });
+
+  it('prints freshly fetched transactions before processing them', async () => {
+    credentials.readEmail.mockResolvedValue('rev@example.test');
+    credentials.readPassword.mockResolvedValue('not-a-real-secret');
+    transactionApi.fetchTransactions.mockResolvedValue([{ date: '', description: 'Fresh Product', url: 'https://product' }]);
+    httpClient.login.mockResolvedValue({ get: async () => ({ body: '<p>No media</p>', status: 200, url: 'https://product' }) });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const root = `/tmp/gizmo-coordinator-fresh-${Date.now()}`;
+
+    await runApplication({ out: root, dryRun: true, clearCache: false, interactive: false, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any);
+    await runApplication({ out: root, dryRun: true, clearCache: false, interactive: false, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any);
+
+    expect(log.mock.calls.flat().join('\n')).toContain('Fresh Product');
+    log.mockRestore();
+  });
+
+  it('processes cached transactions without printing them again', async () => {
+    credentials.readEmail.mockResolvedValue('rev@example.test');
+    credentials.readPassword.mockResolvedValue('not-a-real-secret');
+    transactionApi.fetchTransactions.mockResolvedValue([{ date: '', description: 'Cached Product', url: 'https://product' }]);
+    httpClient.login.mockResolvedValue({ get: async () => ({ body: '<p>No media</p>', status: 200, url: 'https://product' }) });
+    const root = `/tmp/gizmo-coordinator-cached-${Date.now()}`;
+    await mkdir(`${root}/.cache/transactions`, { recursive: true });
+    await writeFile(`${root}/.cache/transactions/transactions.json`, JSON.stringify([{ date: '', description: 'Cached Product', url: 'https://product' }]));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await runApplication({ out: root, dryRun: true, clearCache: false, interactive: false, showInProgressPlan: false, srt: false, vtt: false, yes: false, timeout: 1000 } as any);
+
+    expect(error).toHaveBeenCalledWith('Cached transactions:');
+    error.mockRestore();
   });
 
   it('redacts URLs when displaying a saved plan', async () => {
