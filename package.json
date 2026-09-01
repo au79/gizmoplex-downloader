@@ -36,13 +36,13 @@
     "progress": "^2.0.3"
   },
   "devDependencies": {
-    "@types/node": "^25.6.2",
+    "@types/node": "^26.4.0",
     "@types/progress": "^2.0.7",
     "@vitest/coverage-v8": "^4.1.10",
     "esbuild": "^0.28.1",
     "postject": "1.0.0-alpha.6",
     "tsx": "^4.21.0",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vitest": "^4.1.10"
   }
 }
